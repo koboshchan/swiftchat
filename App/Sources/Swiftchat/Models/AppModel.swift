@@ -1,0 +1,544 @@
+import DiscordProtocol
+import SwiftchatModels
+import SwiftchatPersistence
+import Foundation
+import Observation
+
+@MainActor
+@Observable
+final class AppModel {
+    private(set) var snapshot: BootstrapSnapshot?
+    private(set) var visibleChannels: [Channel] = []
+    private(set) var selectedChannel: Channel?
+    private(set) var messages: [Message] = [] {
+        didSet {
+            messageRows = MessageGrouping.rows(for: messages)
+            if let selectedChannelID { messageCache[selectedChannelID] = messages }
+        }
+    }
+    private(set) var messageRows: [MessageRowPresentation] = []
+    private(set) var members: [Member] = [] {
+        didSet { memberSections = MemberSection.make(from: members) }
+    }
+    private(set) var memberSections: [MemberSection] = []
+    private(set) var currentStatus: PresenceStatus = .offline
+    private(set) var connectionState: ConnectionState = .disconnected
+    private(set) var isAuthenticated = false
+    private(set) var typingText: String?
+    private(set) var isLoading = false
+    private(set) var isLoadingMessages = false
+    private(set) var isLoadingEarlier = false
+    private(set) var hasMoreMessages = false
+    private(set) var messageLoadError: String?
+    private(set) var replyingTo: Message?
+    private(set) var selectedMember: Member?
+    private(set) var selectedProfile: UserProfile?
+    private(set) var isLoadingProfile = false
+    private(set) var profileErrorMessage: String?
+    var selectedGuildID: GuildID?
+    var selectedChannelID: ChannelID? {
+        didSet {
+            guard selectedChannelID != oldValue else { return }
+            selectedChannel = snapshot?.channels.first { $0.id == selectedChannelID }
+                ?? visibleChannels.first { $0.id == selectedChannelID }
+            beginSelectedChannelLoad()
+        }
+    }
+    var draft = ""
+    var showInspector = true
+    var showQuickSwitcher = false
+    var errorMessage: String?
+
+    @ObservationIgnored private var provider: any ChatProvider
+    @ObservationIgnored private var database: SwiftchatDatabase?
+    @ObservationIgnored private var eventTask: Task<Void, Never>?
+    @ObservationIgnored private var typingTask: Task<Void, Never>?
+    @ObservationIgnored private var profileTask: Task<Void, Never>?
+    @ObservationIgnored private var channelLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var guildActivationTask: Task<Void, Never>?
+    @ObservationIgnored private var memberLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var channelLoadGeneration = 0
+    @ObservationIgnored private var messageCache: [ChannelID: [Message]] = [:]
+    @ObservationIgnored private var hasMoreCache: [ChannelID: Bool] = [:]
+    @ObservationIgnored private let restoreStoredSession: Bool
+    @ObservationIgnored private var didAttemptSessionRestore = false
+    @ObservationIgnored private var credentialHandle: CredentialHandle?
+
+    init(provider: any ChatProvider = MockChatProvider(), restoreStoredSession: Bool = true) {
+        self.provider = provider
+        self.restoreStoredSession = restoreStoredSession
+        database = try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
+    }
+
+    func connectAuthenticatedAccount(_ handle: CredentialHandle) async -> Bool {
+        await provider.disconnect()
+        eventTask?.cancel()
+        provider = DiscordRESTProvider(credentials: KeychainCredentialStore(), handle: handle)
+        credentialHandle = handle
+        database = AccountID(handle.accountID).flatMap { try? SwiftchatDatabase(accountID: $0) }
+        snapshot = nil
+        visibleChannels = []
+        selectedChannel = nil
+        selectedGuildID = nil
+        selectedChannelID = nil
+        messages = []
+        messageCache = [:]
+        hasMoreCache = [:]
+        dismissProfile()
+        errorMessage = nil
+        await start()
+        isAuthenticated = snapshot != nil
+        return isAuthenticated
+    }
+
+    func logout() async {
+        await provider.disconnect()
+        eventTask?.cancel()
+        typingTask?.cancel()
+        if let credentialHandle {
+            do {
+                try await KeychainCredentialStore().remove(credentialHandle)
+            } catch {
+                errorMessage = error.localizedDescription
+                return
+            }
+        }
+        credentialHandle = nil
+        provider = MockChatProvider()
+        database = try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
+        snapshot = nil
+        visibleChannels = []
+        selectedChannel = nil
+        selectedGuildID = nil
+        selectedChannelID = nil
+        messages = []
+        messageCache = [:]
+        hasMoreCache = [:]
+        members = []
+        dismissProfile()
+        connectionState = .disconnected
+        isAuthenticated = false
+        didAttemptSessionRestore = true
+        await start()
+    }
+
+    func start() async {
+        guard snapshot == nil else { return }
+        if restoreStoredSession, !didAttemptSessionRestore {
+            didAttemptSessionRestore = true
+            if let handles = try? await KeychainCredentialStore().handles(), let handle = handles.first {
+                _ = await connectAuthenticatedAccount(handle)
+                return
+            }
+        }
+        let stream = await provider.eventStream()
+        eventTask = Task { [weak self] in
+            for await event in stream {
+                guard !Task.isCancelled else { break }
+                self?.consume(event)
+            }
+        }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let value = try await provider.bootstrap()
+            snapshot = value
+            if credentialHandle != nil { isAuthenticated = true }
+            members = value.members
+            currentStatus = await provider.currentStatus()
+            await activateGuild(value.guilds.first?.id)
+            await channelLoadTask?.value
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func selectGuild(_ guildID: GuildID?) {
+        guildActivationTask?.cancel()
+        guildActivationTask = Task { [weak self] in
+            await self?.activateGuild(guildID)
+        }
+    }
+
+    private func activateGuild(_ guildID: GuildID?) async {
+        dismissProfile()
+        selectedGuildID = guildID
+        var channels = snapshot?.channels.filter { channel in
+            guildID == nil ? channel.guildID == nil : channel.guildID == guildID
+        } ?? []
+        visibleChannels = channels
+        if channels.isEmpty {
+            do {
+                channels = try await provider.channels(in: guildID)
+                if var value = snapshot {
+                    value.channels.removeAll { $0.guildID == guildID }
+                    value.channels.append(contentsOf: channels)
+                    snapshot = value
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+        guard !Task.isCancelled, selectedGuildID == guildID else { return }
+        visibleChannels = channels
+        if !visibleChannels.contains(where: { $0.id == selectedChannelID }) {
+            selectedChannelID = visibleChannels.first(where: { $0.name == "general" })?.id ?? visibleChannels.first?.id
+        }
+        beginMemberLoad(for: guildID)
+    }
+
+    private func beginMemberLoad(for guildID: GuildID?) {
+        memberLoadTask?.cancel()
+        memberLoadTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let value = try await provider.members(in: guildID)
+                guard !Task.isCancelled, selectedGuildID == guildID else { return }
+                members = value
+            } catch {
+                guard !Task.isCancelled, selectedGuildID == guildID else { return }
+                members = snapshot.map { [Member(user: $0.currentUser, roleName: "You", status: currentStatus)] } ?? []
+            }
+        }
+    }
+
+    private func beginSelectedChannelLoad() {
+        channelLoadTask?.cancel()
+        channelLoadGeneration &+= 1
+        let generation = channelLoadGeneration
+        messageLoadError = nil
+        isLoadingEarlier = false
+        typingTask?.cancel()
+        typingText = nil
+        replyingTo = nil
+
+        guard let channelID = selectedChannelID else {
+            messages = []
+            draft = ""
+            hasMoreMessages = false
+            isLoadingMessages = false
+            return
+        }
+
+        messages = messageCache[channelID] ?? []
+        hasMoreMessages = hasMoreCache[channelID] ?? false
+        draft = ""
+        isLoadingMessages = true
+        channelLoadTask = Task { [weak self] in
+            await self?.loadSelectedChannel(channelID, generation: generation)
+        }
+    }
+
+    private func loadSelectedChannel(_ channelID: ChannelID, generation: Int) async {
+        async let cachedMessages = storedMessages(in: channelID)
+        async let storedDraft = storedDraft(in: channelID)
+        async let freshPage = provider.messages(in: channelID, before: nil, limit: 100)
+
+        let cached = await cachedMessages
+        guard isCurrentLoad(channelID, generation: generation) else { return }
+        if messages.isEmpty, !cached.isEmpty { messages = cached }
+
+        let savedDraft = await storedDraft
+        guard isCurrentLoad(channelID, generation: generation) else { return }
+        if draft.isEmpty { draft = savedDraft }
+
+        do {
+            let page = try await freshPage
+            guard isCurrentLoad(channelID, generation: generation) else { return }
+            let merged = Self.merging(current: messages, fresh: page.messages)
+            if merged != messages { messages = merged }
+            hasMoreMessages = page.hasMoreBefore
+            hasMoreCache[channelID] = page.hasMoreBefore
+            messageLoadError = nil
+            isLoadingMessages = false
+            try await database?.save(messages: page.messages)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard isCurrentLoad(channelID, generation: generation) else { return }
+            messageLoadError = error.localizedDescription
+            isLoadingMessages = false
+        }
+    }
+
+    func loadEarlier() async {
+        guard let channelID = selectedChannelID, let first = messages.first, hasMoreMessages, !isLoadingEarlier else { return }
+        isLoadingEarlier = true
+        defer { if selectedChannelID == channelID { isLoadingEarlier = false } }
+        do {
+            let page = try await provider.messages(in: channelID, before: first.id, limit: 50)
+            guard !Task.isCancelled, selectedChannelID == channelID else { return }
+            let existingIDs = Set(messages.lazy.map(\.id))
+            let earlier = page.messages.filter { !existingIDs.contains($0.id) }
+            if !earlier.isEmpty { messages.insert(contentsOf: earlier, at: 0) }
+            hasMoreMessages = page.hasMoreBefore
+            hasMoreCache[channelID] = page.hasMoreBefore
+            messageLoadError = nil
+            try await database?.save(messages: page.messages)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard selectedChannelID == channelID else { return }
+            messageLoadError = error.localizedDescription
+        }
+    }
+
+    func retryMessageLoad() {
+        guard selectedChannelID != nil else { return }
+        beginSelectedChannelLoad()
+    }
+
+    func reply(to message: Message) {
+        guard message.channelID == selectedChannelID else { return }
+        replyingTo = message
+        NotificationCenter.default.post(name: .swiftchatFocusComposer, object: nil)
+    }
+
+    func cancelReply() {
+        replyingTo = nil
+    }
+
+    func updateDraft(_ value: String) {
+        draft = value
+        guard let channelID = selectedChannelID else { return }
+        Task { try? await database?.saveDraft(value, channelID: channelID) }
+    }
+
+    func send(attachments: [URL] = []) async {
+        guard let channelID = selectedChannelID else { return }
+        let content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty || !attachments.isEmpty else { return }
+        let replyTo = replyingTo?.id
+        let replyPreview = replyingTo.map {
+            MessageReplyPreview(messageID: $0.id, author: $0.author, content: $0.content)
+        }
+        let outgoing = SendMessageDraft(channelID: channelID, content: content, replyTo: replyTo, attachmentURLs: attachments)
+        let optimistic = Message(
+            id: MessageID(rawValue: UInt64.max - UInt64(messages.count)), channelID: channelID,
+            author: snapshot?.currentUser ?? User(id: UserID(rawValue: 1), username: "me", displayName: "Me"),
+            content: content, replyTo: replyTo, replyPreview: replyPreview, attachments: attachments.enumerated().map {
+                Attachment(id: "pending-\($0.offset)", filename: $0.element.lastPathComponent, url: $0.element)
+            }, nonce: outgoing.nonce, outboxState: .sending
+        )
+        messages.append(optimistic)
+        replyingTo = nil
+        updateDraft("")
+        do {
+            let confirmed = try await provider.send(outgoing)
+            reconcile(confirmed)
+            try await database?.save(messages: [confirmed])
+        } catch {
+            if let index = messages.firstIndex(where: { $0.nonce == outgoing.nonce }) { messages[index].outboxState = .failed }
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func edit(_ message: Message, content: String) async {
+        do { reconcile(try await provider.edit(messageID: message.id, channelID: message.channelID, content: content)) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func delete(_ message: Message) async {
+        do {
+            try await provider.delete(messageID: message.id, channelID: message.channelID)
+            if replyingTo?.id == message.id { replyingTo = nil }
+        }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func toggleReaction(_ emoji: String, on message: Message) async {
+        do { try await provider.toggleReaction(emoji, messageID: message.id, channelID: message.channelID) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func updateStatus(_ status: PresenceStatus) async {
+        do {
+            try await provider.updateStatus(status)
+            currentStatus = status
+            members = members.map { member in
+                guard member.user.id == snapshot?.currentUser.id else { return member }
+                var updatedMember = member
+                updatedMember.status = status
+                return updatedMember
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func selectMember(_ member: Member) {
+        if selectedMember?.id == member.id {
+            dismissProfile()
+            return
+        }
+        profileTask?.cancel()
+        selectedMember = member
+        selectedProfile = nil
+        profileErrorMessage = nil
+        isLoadingProfile = true
+        let guildID = selectedGuildID
+        profileTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                var value = try await provider.profile(for: member.id, in: guildID)
+                guard !Task.isCancelled, selectedMember?.id == member.id, selectedGuildID == guildID else { return }
+                value.status = member.status
+                value.customStatus = member.customStatus
+                selectedProfile = value
+            } catch is CancellationError {
+                return
+            } catch {
+                guard !Task.isCancelled, selectedMember?.id == member.id else { return }
+                profileErrorMessage = error.localizedDescription
+            }
+            if selectedMember?.id == member.id { isLoadingProfile = false }
+        }
+    }
+
+    func dismissProfile() {
+        profileTask?.cancel()
+        profileTask = nil
+        selectedMember = nil
+        selectedProfile = nil
+        isLoadingProfile = false
+        profileErrorMessage = nil
+    }
+
+    func dismissError() { errorMessage = nil }
+
+    private func storedMessages(in channelID: ChannelID) async -> [Message] {
+        (try? await database?.messages(in: channelID)) ?? []
+    }
+
+    private func storedDraft(in channelID: ChannelID) async -> String {
+        (try? await database?.draft(channelID: channelID)) ?? ""
+    }
+
+    private func isCurrentLoad(_ channelID: ChannelID, generation: Int) -> Bool {
+        !Task.isCancelled && selectedChannelID == channelID && channelLoadGeneration == generation
+    }
+
+    private static func merging(current: [Message], fresh: [Message]) -> [Message] {
+        var byID: [MessageID: Message] = [:]
+        for message in current { byID[message.id] = message }
+        for message in fresh {
+            var resolved = message
+            if let existing = byID[message.id] {
+                resolved.replyTo = resolved.replyTo ?? existing.replyTo
+                resolved.replyPreview = resolved.replyPreview ?? existing.replyPreview
+            }
+            byID[resolved.id] = resolved
+        }
+        return byID.values.sorted { lhs, rhs in
+            if lhs.timestamp != rhs.timestamp { return lhs.timestamp < rhs.timestamp }
+            return lhs.id < rhs.id
+        }
+    }
+
+    private func consume(_ event: ClientEvent) {
+        switch event {
+        case let .connectionChanged(state): connectionState = state
+        case let .messageCreated(message):
+            persist(message)
+            if message.channelID == selectedChannelID { reconcile(message) }
+            else { cache(message) }
+        case let .messageUpdated(message):
+            persist(message)
+            if message.channelID == selectedChannelID { reconcile(message) }
+            else { cache(message) }
+        case let .messageDeleted(channelID, messageID):
+            Task { try? await database?.deleteMessage(messageID) }
+            if replyingTo?.id == messageID { replyingTo = nil }
+            if channelID == selectedChannelID {
+                messages.removeAll { $0.id == messageID }
+            } else {
+                messageCache[channelID]?.removeAll { $0.id == messageID }
+            }
+        case let .typing(channelID, user):
+            guard channelID == selectedChannelID else { return }
+            typingText = "\(user.displayName) is typing…"
+            typingTask?.cancel()
+            typingTask = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(4))
+                self?.typingText = nil
+            }
+        case let .membersChanged(guildID, value):
+            guard guildID == selectedGuildID else { return }
+            members = value
+            if let selectedMember, let updated = value.first(where: { $0.id == selectedMember.id }) {
+                self.selectedMember = updated
+            }
+        case let .snapshotChanged(value):
+            snapshot = value
+            selectGuild(selectedGuildID)
+        }
+    }
+
+    private func reconcile(_ message: Message) {
+        var updated = messages
+        var resolved = message
+        if let nonce = message.nonce, let index = updated.firstIndex(where: { $0.nonce == nonce }) {
+            resolved.replyTo = resolved.replyTo ?? updated[index].replyTo
+            resolved.replyPreview = resolved.replyPreview ?? updated[index].replyPreview
+            updated[index] = resolved
+        } else if let index = updated.firstIndex(where: { $0.id == message.id }) {
+            resolved.replyTo = resolved.replyTo ?? updated[index].replyTo
+            resolved.replyPreview = resolved.replyPreview ?? updated[index].replyPreview
+            updated[index] = resolved
+        } else {
+            updated.append(resolved)
+        }
+        var messagesByID: [MessageID: Message] = [:]
+        for value in updated { messagesByID[value.id] = value }
+        updated = messagesByID.values.sorted { lhs, rhs in
+            if lhs.timestamp != rhs.timestamp { return lhs.timestamp < rhs.timestamp }
+            return lhs.id < rhs.id
+        }
+        if updated != messages { messages = updated }
+    }
+
+    private func persist(_ message: Message) {
+        Task { try? await database?.save(messages: [message]) }
+    }
+
+    private func cache(_ message: Message) {
+        let current = messageCache[message.channelID] ?? []
+        messageCache[message.channelID] = Self.merging(current: current, fresh: [message])
+    }
+}
+
+struct MessageRowPresentation: Identifiable, Equatable {
+    var id: MessageID { message.id }
+    let message: Message
+    let startsGroup: Bool
+    let replyPreview: MessageReplyPreview?
+}
+
+enum MessageGrouping {
+    // Discord's current cozy layout uses a seven-minute continuation barrier.
+    private static let continuationInterval: TimeInterval = 7 * 60
+
+    static func rows(for messages: [Message], calendar: Calendar = .autoupdatingCurrent) -> [MessageRowPresentation] {
+        var messagesByID: [MessageID: Message] = [:]
+        for message in messages { messagesByID[message.id] = message }
+        return messages.enumerated().map { index, message in
+            let replyPreview = message.replyTo.flatMap { messageID -> MessageReplyPreview? in
+                if let referenced = messagesByID[messageID] {
+                    return MessageReplyPreview(messageID: referenced.id, author: referenced.author, content: referenced.content)
+                }
+                return message.replyPreview
+            }
+            guard index > 0 else {
+                return MessageRowPresentation(message: message, startsGroup: true, replyPreview: replyPreview)
+            }
+            let previous = messages[index - 1]
+            let continues = previous.author.id == message.author.id
+                && message.replyTo == nil
+                && previous.replyTo == nil
+                && message.timestamp.timeIntervalSince(previous.timestamp) >= 0
+                && message.timestamp.timeIntervalSince(previous.timestamp) < continuationInterval
+                && calendar.isDate(previous.timestamp, inSameDayAs: message.timestamp)
+            return MessageRowPresentation(message: message, startsGroup: !continues, replyPreview: replyPreview)
+        }
+    }
+}

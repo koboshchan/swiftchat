@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace version="1.0">
+   <FileRef location="group:App"></FileRef>
+   <FileRef location="group:Packages/SwiftchatModels"></FileRef>
+   <FileRef location="group:Packages/DiscordProtocol"></FileRef>
+   <FileRef location="group:Packages/SwiftchatPersistence"></FileRef>
+   <FileRef location="group:Packages/MessageRendering"></FileRef>
+   <FileRef location="group:Packages/MediaPipeline"></FileRef>
+   <FileRef location="group:Packages/SwiftchatPluginSDK"></FileRef>
+</Workspace>
+

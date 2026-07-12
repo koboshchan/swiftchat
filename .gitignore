@@ -1,0 +1,15 @@
+.DS_Store
+.build/
+**/.build/
+dist/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.swiftpm/
+*.db
+*.db-shm
+*.db-wal
+*.token
+*.cookies
+Package.resolved
+
