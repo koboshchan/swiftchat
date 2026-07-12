@@ -1,7 +1,9 @@
 import DiscordProtocol
 import SwiftchatModels
 import SwiftchatPersistence
+import CoreAudio
 import Foundation
+import MediaPipeline
 import Observation
 
 @MainActor
@@ -35,6 +37,21 @@ final class AppModel {
     private(set) var selectedProfile: UserProfile?
     private(set) var isLoadingProfile = false
     private(set) var profileErrorMessage: String?
+    private(set) var activeVoiceChannel: Channel?
+    private(set) var voiceSessionState: VoiceSessionState = .idle
+    private(set) var voiceParticipants: [VoiceRemoteParticipant] = []
+    private(set) var isLocallySpeaking = false
+    private(set) var voiceVideoFrames: [String: VoiceVideoFrame] = [:]
+    private(set) var voiceEncryptionVersion: UInt16?
+    private(set) var voiceLatencyMilliseconds: Int?
+    private(set) var voiceErrorMessage: String?
+    private(set) var voiceStates: [UserID: VoiceParticipantState] = [:]
+    private(set) var mediaDevices = MediaDeviceCatalog.snapshot()
+    var isVoiceMuted = UserDefaults.standard.bool(forKey: "voiceMuted")
+    var isVoiceDeafened = UserDefaults.standard.bool(forKey: "voiceDeafened")
+    var isCameraEnabled = false
+    var inputVolume = Float(UserDefaults.standard.object(forKey: "voiceInputVolume") as? Double ?? 1)
+    var outputVolume = Float(UserDefaults.standard.object(forKey: "voiceOutputVolume") as? Double ?? 1)
     var selectedGuildID: GuildID?
     var selectedChannelID: ChannelID? {
         didSet {
@@ -57,6 +74,10 @@ final class AppModel {
     @ObservationIgnored private var channelLoadTask: Task<Void, Never>?
     @ObservationIgnored private var guildActivationTask: Task<Void, Never>?
     @ObservationIgnored private var memberLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var voiceEventTask: Task<Void, Never>?
+    @ObservationIgnored private var voiceMigrationTask: Task<Void, Never>?
+    @ObservationIgnored private var voiceSession: DiscordVoiceSession?
+    @ObservationIgnored private var voiceMigrationGeneration = 0
     @ObservationIgnored private var channelLoadGeneration = 0
     @ObservationIgnored private var messageCache: [ChannelID: [Message]] = [:]
     @ObservationIgnored private var hasMoreCache: [ChannelID: Bool] = [:]
@@ -71,12 +92,14 @@ final class AppModel {
     }
 
     func connectAuthenticatedAccount(_ handle: CredentialHandle) async -> Bool {
+        await leaveVoice()
         await provider.disconnect()
         eventTask?.cancel()
         provider = DiscordRESTProvider(credentials: KeychainCredentialStore(), handle: handle)
         credentialHandle = handle
         database = AccountID(handle.accountID).flatMap { try? SwiftchatDatabase(accountID: $0) }
         snapshot = nil
+        voiceStates = [:]
         visibleChannels = []
         selectedChannel = nil
         selectedGuildID = nil
@@ -92,6 +115,7 @@ final class AppModel {
     }
 
     func logout() async {
+        await leaveVoice()
         await provider.disconnect()
         eventTask?.cancel()
         typingTask?.cancel()
@@ -107,6 +131,7 @@ final class AppModel {
         provider = MockChatProvider()
         database = try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
         snapshot = nil
+        voiceStates = [:]
         visibleChannels = []
         selectedChannel = nil
         selectedGuildID = nil
@@ -212,7 +237,7 @@ final class AppModel {
         typingText = nil
         replyingTo = nil
 
-        guard let channelID = selectedChannelID else {
+        guard let channelID = selectedChannelID, selectedChannel?.kind != .voice else {
             messages = []
             draft = ""
             hasMoreMessages = false
@@ -366,6 +391,303 @@ final class AppModel {
         }
     }
 
+    func joinVoice(_ channel: Channel) async {
+        guard channel.kind == .voice else { return }
+        if activeVoiceChannel?.id == channel.id,
+           voiceSessionState == .connected || voiceSessionState == .connecting { return }
+        await leaveVoice()
+        activeVoiceChannel = channel
+        voiceSessionState = .connecting
+        voiceErrorMessage = nil
+        do {
+            let info = try await provider.joinVoice(
+                channelID: channel.id,
+                guildID: channel.guildID,
+                selfMute: isVoiceMuted,
+                selfDeaf: isVoiceDeafened
+            )
+            try await startVoiceSession(with: info)
+        } catch {
+            voiceEventTask?.cancel()
+            voiceEventTask = nil
+            await voiceSession?.disconnect()
+            voiceSessionState = .failed
+            voiceErrorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+            try? await provider.updateVoiceState(
+                channelID: nil,
+                guildID: channel.guildID,
+                selfMute: false,
+                selfDeaf: false,
+                selfVideo: false
+            )
+            activeVoiceChannel = nil
+            voiceSession = nil
+        }
+    }
+
+    func leaveVoice() async {
+        let guildID = activeVoiceChannel?.guildID
+        voiceMigrationGeneration &+= 1
+        voiceMigrationTask?.cancel()
+        voiceMigrationTask = nil
+        voiceEventTask?.cancel()
+        voiceEventTask = nil
+        await voiceSession?.disconnect()
+        voiceSession = nil
+        if activeVoiceChannel != nil {
+            try? await provider.updateVoiceState(
+                channelID: nil,
+                guildID: guildID,
+                selfMute: false,
+                selfDeaf: false,
+                selfVideo: false
+            )
+        }
+        activeVoiceChannel = nil
+        voiceParticipants = []
+        isLocallySpeaking = false
+        voiceVideoFrames = [:]
+        if let ownUserID = snapshot?.currentUser.id { voiceStates[ownUserID] = nil }
+        voiceEncryptionVersion = nil
+        voiceLatencyMilliseconds = nil
+        voiceSessionState = .idle
+        isCameraEnabled = false
+    }
+
+    func toggleVoiceMute() async {
+        isVoiceMuted.toggle()
+        UserDefaults.standard.set(isVoiceMuted, forKey: "voiceMuted")
+        await voiceSession?.setMuted(isVoiceMuted)
+        await publishVoiceState()
+    }
+
+    func toggleVoiceDeafen() async {
+        isVoiceDeafened.toggle()
+        UserDefaults.standard.set(isVoiceDeafened, forKey: "voiceDeafened")
+        await voiceSession?.setDeafened(isVoiceDeafened)
+        await publishVoiceState()
+    }
+
+    func toggleCamera() async {
+        let enabled = !isCameraEnabled
+        if voiceSession == nil {
+            isCameraEnabled = enabled
+            await publishVoiceState()
+            return
+        }
+        do {
+            try await voiceSession?.setCameraEnabled(enabled)
+            isCameraEnabled = enabled
+            if !enabled, let ownUserID = snapshot?.currentUser.id {
+                voiceVideoFrames[String(ownUserID.rawValue)] = nil
+            }
+            try await provider.updateVoiceState(
+                channelID: activeVoiceChannel?.id,
+                guildID: activeVoiceChannel?.guildID,
+                selfMute: isVoiceMuted,
+                selfDeaf: isVoiceDeafened,
+                selfVideo: enabled
+            )
+        } catch {
+            voiceErrorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func selectCamera(_ camera: CameraDeviceInfo?) async {
+        UserDefaults.standard.set(camera?.uniqueID, forKey: "voiceCameraUID")
+        do { try await voiceSession?.selectCamera(uniqueID: camera?.uniqueID) }
+        catch {
+            voiceErrorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func updateInputVolume(_ value: Float) async {
+        inputVolume = min(max(value, 0), 2)
+        UserDefaults.standard.set(Double(inputVolume), forKey: "voiceInputVolume")
+        await voiceSession?.setInputVolume(inputVolume)
+    }
+
+    func updateOutputVolume(_ value: Float) async {
+        outputVolume = min(max(value, 0), 2)
+        UserDefaults.standard.set(Double(outputVolume), forKey: "voiceOutputVolume")
+        await voiceSession?.setOutputVolume(outputVolume)
+    }
+
+    func selectInputDevice(_ device: AudioDeviceInfo?) async {
+        UserDefaults.standard.set(device?.uid, forKey: "voiceInputDeviceUID")
+        do { try await voiceSession?.selectInputDevice(device?.id) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func selectOutputDevice(_ device: AudioDeviceInfo?) async {
+        UserDefaults.standard.set(device?.uid, forKey: "voiceOutputDeviceUID")
+        do { try await voiceSession?.selectOutputDevice(device?.id) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func updateParticipantVolume(_ value: Float, userID: String) async {
+        await voiceSession?.setParticipantVolume(value, userID: userID)
+    }
+
+    func refreshMediaDevices() {
+        mediaDevices = MediaDeviceCatalog.snapshot()
+    }
+
+    private func publishVoiceState() async {
+        guard let activeVoiceChannel else { return }
+        do {
+            try await provider.updateVoiceState(
+                channelID: activeVoiceChannel.id,
+                guildID: activeVoiceChannel.guildID,
+                selfMute: isVoiceMuted,
+                selfDeaf: isVoiceDeafened,
+                selfVideo: isCameraEnabled
+            )
+        } catch {
+            voiceErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func selectedAudioDeviceID(defaultsKey: String, devices: [AudioDeviceInfo]) -> AudioDeviceID? {
+        guard let uid = UserDefaults.standard.string(forKey: defaultsKey) else { return nil }
+        return devices.first(where: { $0.uid == uid })?.id
+    }
+
+    private func currentVoiceConfiguration() -> VoiceSessionConfiguration {
+        let outputDeviceID = selectedAudioDeviceID(
+            defaultsKey: "voiceOutputDeviceUID",
+            devices: mediaDevices.audioOutputs
+        )
+        return VoiceSessionConfiguration(
+            inputDeviceID: resolvedInputDeviceID(),
+            outputDeviceID: outputDeviceID,
+            inputVolume: inputVolume,
+            outputVolume: outputVolume,
+            isMuted: isVoiceMuted,
+            isDeafened: isVoiceDeafened,
+            cameraUniqueID: UserDefaults.standard.string(forKey: "voiceCameraUID")
+        )
+    }
+
+    private func resolvedInputDeviceID() -> AudioDeviceID? {
+        if let storedUID = UserDefaults.standard.string(forKey: "voiceInputDeviceUID"),
+           !storedUID.isEmpty {
+            return mediaDevices.audioInputs.first(where: { $0.uid == storedUID })?.id
+        }
+
+        let defaultInput = mediaDevices.audioInputs.first(where: \.isDefault)
+        // Automatic capture must not inherit a Bluetooth call route or a
+        // silent virtual/aggregate device. Explicit selections remain honored.
+        if defaultInput?.isBluetooth == true || defaultInput?.isVirtual == true,
+           let builtIn = mediaDevices.audioInputs.first(where: \.isBuiltIn) {
+            return builtIn.id
+        }
+        return nil
+    }
+
+    private func startVoiceSession(with info: VoiceConnectionInfo) async throws {
+        if info.endpoint == "mock.swiftchat.invalid" {
+            voiceSessionState = .connected
+            return
+        }
+
+        let session = DiscordVoiceSession(info: info, configuration: currentVoiceConfiguration())
+        voiceSession = session
+        voiceEventTask?.cancel()
+        voiceEventTask = Task { [weak self] in
+            for await event in session.events {
+                guard !Task.isCancelled else { return }
+                self?.consumeVoiceEvent(event)
+            }
+        }
+        try await session.connect()
+    }
+
+    private func scheduleVoiceServerMigration(to info: VoiceConnectionInfo?) {
+        voiceMigrationGeneration &+= 1
+        let generation = voiceMigrationGeneration
+        voiceMigrationTask?.cancel()
+        voiceMigrationTask = Task { [weak self] in
+            await self?.migrateVoiceServer(to: info, generation: generation)
+        }
+    }
+
+    private func migrateVoiceServer(to info: VoiceConnectionInfo?, generation: Int) async {
+        guard activeVoiceChannel != nil, generation == voiceMigrationGeneration else { return }
+        let cameraWasEnabled = isCameraEnabled
+
+        voiceEventTask?.cancel()
+        voiceEventTask = nil
+        await voiceSession?.disconnect()
+        guard !Task.isCancelled, generation == voiceMigrationGeneration else { return }
+
+        voiceSession = nil
+        voiceParticipants = []
+        voiceVideoFrames = [:]
+        voiceEncryptionVersion = nil
+        voiceLatencyMilliseconds = nil
+        isCameraEnabled = false
+        voiceSessionState = .reconnecting
+
+        guard let info else { return }
+        guard info.channelID == activeVoiceChannel?.id else { return }
+
+        do {
+            try await startVoiceSession(with: info)
+            guard !Task.isCancelled, generation == voiceMigrationGeneration else {
+                await voiceSession?.disconnect()
+                return
+            }
+            if cameraWasEnabled, voiceSession != nil {
+                try await voiceSession?.setCameraEnabled(true)
+                isCameraEnabled = true
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard generation == voiceMigrationGeneration else { return }
+            voiceSessionState = .failed
+            voiceErrorMessage = error.localizedDescription
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func consumeVoiceEvent(_ event: VoiceSessionEvent) {
+        switch event {
+        case let .stateChanged(state):
+            voiceSessionState = state
+        case let .latencyUpdated(milliseconds):
+            voiceLatencyMilliseconds = milliseconds
+        case let .participantChanged(participant):
+            if let index = voiceParticipants.firstIndex(where: { $0.userID == participant.userID }) {
+                voiceParticipants[index] = participant
+            } else {
+                voiceParticipants.append(participant)
+            }
+            voiceParticipants.sort { $0.userID < $1.userID }
+            if let userID = UserID(participant.userID), var state = voiceStates[userID] {
+                state.isVideoEnabled = participant.isCameraEnabled
+                voiceStates[userID] = state
+            }
+        case let .participantLeft(userID):
+            voiceParticipants.removeAll { $0.userID == userID }
+            voiceVideoFrames[userID] = nil
+        case let .localSpeakingChanged(speaking):
+            isLocallySpeaking = speaking
+        case let .encryptionReady(version):
+            voiceEncryptionVersion = version
+        case let .videoFrame(userID, frame):
+            voiceVideoFrames[userID] = frame
+        case let .videoStopped(userID):
+            voiceVideoFrames[userID] = nil
+        case let .error(message):
+            voiceErrorMessage = message
+        }
+    }
+
     func selectMember(_ member: Member) {
         if selectedMember?.id == member.id {
             dismissProfile()
@@ -468,6 +790,12 @@ final class AppModel {
             if let selectedMember, let updated = value.first(where: { $0.id == selectedMember.id }) {
                 self.selectedMember = updated
             }
+        case let .voiceStateChanged(state):
+            if state.channelID == nil { voiceStates[state.userID] = nil }
+            else { voiceStates[state.userID] = state }
+            if !state.isVideoEnabled { voiceVideoFrames[String(state.userID.rawValue)] = nil }
+        case let .voiceServerChanged(info):
+            scheduleVoiceServerMigration(to: info)
         case let .snapshotChanged(value):
             snapshot = value
             selectGuild(selectedGuildID)

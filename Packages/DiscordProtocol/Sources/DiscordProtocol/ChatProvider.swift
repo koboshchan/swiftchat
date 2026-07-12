@@ -13,8 +13,57 @@ public protocol ChatProvider: Sendable {
     func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message
     func delete(messageID: MessageID, channelID: ChannelID) async throws
     func toggleReaction(_ emoji: String, messageID: MessageID, channelID: ChannelID) async throws
+    func joinVoice(
+        channelID: ChannelID,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool
+    ) async throws -> VoiceConnectionInfo
+    func updateVoiceState(
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool,
+        selfVideo: Bool
+    ) async throws
     func eventStream() async -> AsyncStream<ClientEvent>
     func disconnect() async
+}
+
+public extension ChatProvider {
+    func joinVoice(
+        channelID: ChannelID,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool
+    ) async throws -> VoiceConnectionInfo {
+        throw ChatProviderError.invalidRequest("Voice calling is unavailable for this provider.")
+    }
+
+    func updateVoiceState(
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool,
+        selfVideo: Bool
+    ) async throws {
+        throw ChatProviderError.invalidRequest("Voice calling is unavailable for this provider.")
+    }
+
+    func updateVoiceState(
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool
+    ) async throws {
+        try await updateVoiceState(
+            channelID: channelID,
+            guildID: guildID,
+            selfMute: selfMute,
+            selfDeaf: selfDeaf,
+            selfVideo: false
+        )
+    }
 }
 
 public enum ChatProviderError: LocalizedError, Equatable, Sendable {

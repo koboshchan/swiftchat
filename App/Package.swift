@@ -26,9 +26,14 @@ let package = Package(
             swiftSettings: [
                 .enableUpcomingFeature("StrictConcurrency"),
                 .defaultIsolation(MainActor.self),
+                .interoperabilityMode(.Cxx),
             ]
         ),
         .executableTarget(name: "SwiftchatPluginHost", dependencies: ["SwiftchatPluginSDK"]),
-        .testTarget(name: "SwiftchatAppTests", dependencies: ["Swiftchat", "DiscordProtocol"]),
+        .testTarget(
+            name: "SwiftchatAppTests",
+            dependencies: ["Swiftchat", "DiscordProtocol"],
+            swiftSettings: [.interoperabilityMode(.Cxx)]
+        ),
     ]
 )

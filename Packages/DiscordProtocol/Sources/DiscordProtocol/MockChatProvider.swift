@@ -31,6 +31,7 @@ public actor MockChatProvider: ChatProvider {
             Channel(id: ChannelID(rawValue: 212), guildID: guild.id, name: "server-suggestions", category: "CHAT"),
             Channel(id: ChannelID(rawValue: 220), guildID: guild.id, name: "suggestions", kind: .forum, category: "DEV"),
             Channel(id: ChannelID(rawValue: 221), guildID: guild.id, name: "bug-reporting", kind: .forum, category: "DEV"),
+            Channel(id: ChannelID(rawValue: 230), guildID: guild.id, name: "Lounge", kind: .voice, category: "VOICE"),
             Channel(id: ChannelID(rawValue: 300), guildID: secondGuild.id, name: "native-client", topic: "Building Swiftchat in SwiftUI", category: "PROJECT"),
             Channel(id: ChannelID(rawValue: 400), guildID: nil, name: "alex", kind: .directMessage, recipients: [alex]),
         ]
@@ -190,6 +191,53 @@ public actor MockChatProvider: ChatProvider {
         }
         messagesByChannel[channelID]![index] = message
         continuation?.yield(.messageUpdated(message))
+    }
+
+    public func joinVoice(
+        channelID: ChannelID,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool
+    ) async throws -> VoiceConnectionInfo {
+        guard snapshot.channels.contains(where: { $0.id == channelID && $0.kind == .voice }) else {
+            throw ChatProviderError.invalidRequest("That demo voice channel is unavailable.")
+        }
+        let state = VoiceParticipantState(
+            userID: currentUser.id,
+            channelID: channelID,
+            guildID: guildID,
+            sessionID: "demo-session",
+            isSelfMuted: selfMute,
+            isSelfDeafened: selfDeaf
+        )
+        continuation?.yield(.voiceStateChanged(state))
+        return VoiceConnectionInfo(
+            serverID: guildID?.description ?? channelID.description,
+            channelID: channelID,
+            guildID: guildID,
+            userID: currentUser.id,
+            sessionID: state.sessionID,
+            token: "demo-token",
+            endpoint: "mock.swiftchat.invalid"
+        )
+    }
+
+    public func updateVoiceState(
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool,
+        selfVideo: Bool
+    ) async throws {
+        continuation?.yield(.voiceStateChanged(VoiceParticipantState(
+            userID: currentUser.id,
+            channelID: channelID,
+            guildID: guildID,
+            sessionID: "demo-session",
+            isSelfMuted: selfMute,
+            isSelfDeafened: selfDeaf,
+            isVideoEnabled: selfVideo
+        )))
     }
 
     public func eventStream() async -> AsyncStream<ClientEvent> {

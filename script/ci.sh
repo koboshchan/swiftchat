@@ -17,7 +17,6 @@ if rg -n --hidden -g '!README.md' -g '!script/ci.sh' -g '!.git/**' '(Authorizati
 fi
 
 swift test --package-path "$ROOT_DIR/App"
-for package in SwiftchatModels DiscordProtocol SwiftchatPersistence MessageRendering SwiftchatPluginSDK; do
+for package in SwiftchatModels DiscordProtocol SwiftchatPersistence MessageRendering SwiftchatPluginSDK MediaPipeline DaveKit; do
   swift test --package-path "$ROOT_DIR/Packages/$package"
 done
-

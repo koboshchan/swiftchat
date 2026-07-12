@@ -10,16 +10,24 @@ DIST_DIR="$ROOT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
 MACOS="$CONTENTS/MacOS"
+FRAMEWORKS="$CONTENTS/Frameworks"
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+if [[ "$MODE" != "package" ]]; then
+  pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+fi
 
 swift build --package-path "$PACKAGE_DIR" --product "$APP_NAME"
 BIN_DIR="$(swift build --package-path "$PACKAGE_DIR" --show-bin-path)"
 
 rm -rf "$APP_BUNDLE"
-mkdir -p "$MACOS"
+mkdir -p "$MACOS" "$FRAMEWORKS"
 cp "$BIN_DIR/$APP_NAME" "$MACOS/$APP_NAME"
 chmod +x "$MACOS/$APP_NAME"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$MACOS/$APP_NAME"
+if [[ -d "$BIN_DIR/OpenSSL.framework" ]]; then
+  ditto "$BIN_DIR/OpenSSL.framework" "$FRAMEWORKS/OpenSSL.framework"
+  codesign --force --sign - "$FRAMEWORKS/OpenSSL.framework" >/dev/null
+fi
 
 cat >"$CONTENTS/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -36,6 +44,8 @@ cat >"$CONTENTS/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>27.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>Swiftchat uses your microphone when you join a voice call.</string>
+  <key>NSCameraUsageDescription</key><string>Swiftchat uses your camera when you enable video in a call.</string>
 </dict>
 </plist>
 PLIST
@@ -45,6 +55,7 @@ codesign --force --sign - --entitlements "$ROOT_DIR/Config/Swiftchat.entitlement
 open_app() { /usr/bin/open -n "$APP_BUNDLE"; }
 
 case "$MODE" in
+  package) ;;
   run) open_app ;;
   --debug|debug) lldb -- "$MACOS/$APP_NAME" ;;
   --logs|logs)
@@ -60,6 +71,5 @@ case "$MODE" in
     sleep 2
     pgrep -x "$APP_NAME" >/dev/null
     ;;
-  *) echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
+  *) echo "usage: $0 [package|run|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
 esac
-

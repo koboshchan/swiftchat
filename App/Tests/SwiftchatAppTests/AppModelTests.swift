@@ -106,6 +106,21 @@ import Foundation
 }
 
 @MainActor
+@Test func selectingVoiceChannelNavigatesWithoutJoiningOrLoadingMessages() async throws {
+    let model = AppModel(restoreStoredSession: false)
+    await model.start()
+    let voiceChannel = try #require(model.visibleChannels.first(where: { $0.kind == .voice }))
+
+    model.selectedChannelID = voiceChannel.id
+
+    #expect(model.selectedChannel?.id == voiceChannel.id)
+    #expect(model.selectedChannel?.kind == .voice)
+    #expect(model.activeVoiceChannel == nil)
+    #expect(model.messages.isEmpty)
+    #expect(!model.isLoadingMessages)
+}
+
+@MainActor
 @Test func profileRoleNamesRemoveCustomEmojiMarkupAndCollapseWhitespace() {
     #expect(
         ProfileRolePresentation.normalizedName("  Developers   <:sparkle:123456>   💖  ")
@@ -156,6 +171,28 @@ import Foundation
     #expect(await provider.requestCount(for: secondChannel) == 1)
 }
 
+@MainActor
+@Test func voiceServerReallocationKeepsTheCallSelectedAndReconnects() async throws {
+    let provider = VoiceMigrationTestProvider()
+    let model = AppModel(provider: provider, restoreStoredSession: false)
+    await model.start()
+    let voiceChannel = try #require(model.visibleChannels.first)
+
+    await model.joinVoice(voiceChannel)
+    #expect(model.activeVoiceChannel?.id == voiceChannel.id)
+    #expect(model.voiceSessionState == .connected)
+
+    await provider.emit(.voiceServerChanged(nil))
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(model.activeVoiceChannel?.id == voiceChannel.id)
+    #expect(model.voiceSessionState == .reconnecting)
+
+    await provider.emit(.voiceServerChanged(await provider.connectionInfo(token: "replacement")))
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(model.activeVoiceChannel?.id == voiceChannel.id)
+    #expect(model.voiceSessionState == .connected)
+}
+
 private actor ChannelLoadTestProvider: ChatProvider {
     private let user = User(id: UserID(rawValue: 91_000), username: "tester", displayName: "Tester")
     private let testChannels = [
@@ -202,4 +239,77 @@ private actor ChannelLoadTestProvider: ChatProvider {
     func disconnect() async {}
 
     func requestCount(for channelID: ChannelID) -> Int { messageRequests[channelID, default: 0] }
+}
+
+private actor VoiceMigrationTestProvider: ChatProvider {
+    private let guild = Guild(id: GuildID(rawValue: 92_000), name: "Voice Test")
+    private let user = User(id: UserID(rawValue: 92_001), username: "tester", displayName: "Tester")
+    private let channel = Channel(
+        id: ChannelID(rawValue: 92_002),
+        guildID: GuildID(rawValue: 92_000),
+        name: "Lounge",
+        kind: .voice
+    )
+    private var continuation: AsyncStream<ClientEvent>.Continuation?
+
+    func bootstrap() async throws -> BootstrapSnapshot {
+        BootstrapSnapshot(currentUser: user, guilds: [guild], channels: [channel], members: [])
+    }
+
+    func channels(in guildID: GuildID?) async throws -> [Channel] { [channel] }
+    func members(in guildID: GuildID?) async throws -> [Member] { [] }
+    func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
+        throw ChatProviderError.invalidRequest("Profiles are not part of this test.")
+    }
+    func currentStatus() async -> PresenceStatus { .online }
+    func updateStatus(_ status: PresenceStatus) async throws {}
+    func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
+        MessagePage(messages: [], hasMoreBefore: false)
+    }
+    func send(_ draft: SendMessageDraft) async throws -> Message {
+        throw ChatProviderError.invalidRequest("Sending is not part of this test.")
+    }
+    func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message {
+        throw ChatProviderError.invalidRequest("Editing is not part of this test.")
+    }
+    func delete(messageID: MessageID, channelID: ChannelID) async throws {}
+    func toggleReaction(_ emoji: String, messageID: MessageID, channelID: ChannelID) async throws {}
+    func joinVoice(
+        channelID: ChannelID,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool
+    ) async throws -> VoiceConnectionInfo {
+        connectionInfo(token: "initial")
+    }
+    func updateVoiceState(
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool,
+        selfVideo: Bool
+    ) async throws {}
+    func eventStream() async -> AsyncStream<ClientEvent> {
+        AsyncStream { continuation = $0 }
+    }
+    func disconnect() async {
+        continuation?.finish()
+        continuation = nil
+    }
+
+    func emit(_ event: ClientEvent) {
+        continuation?.yield(event)
+    }
+
+    func connectionInfo(token: String) -> VoiceConnectionInfo {
+        VoiceConnectionInfo(
+            serverID: guild.id.description,
+            channelID: channel.id,
+            guildID: guild.id,
+            userID: user.id,
+            sessionID: "session",
+            token: token,
+            endpoint: "mock.swiftchat.invalid"
+        )
+    }
 }

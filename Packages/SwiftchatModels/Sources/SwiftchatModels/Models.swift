@@ -590,6 +590,74 @@ public struct SendMessageDraft: Equatable, Sendable {
     }
 }
 
+public struct VoiceConnectionInfo: Equatable, Sendable {
+    public var serverID: String
+    public var channelID: ChannelID
+    public var guildID: GuildID?
+    public var userID: UserID
+    public var sessionID: String
+    public var token: String
+    public var endpoint: String
+
+    public init(
+        serverID: String,
+        channelID: ChannelID,
+        guildID: GuildID?,
+        userID: UserID,
+        sessionID: String,
+        token: String,
+        endpoint: String
+    ) {
+        self.serverID = serverID
+        self.channelID = channelID
+        self.guildID = guildID
+        self.userID = userID
+        self.sessionID = sessionID
+        self.token = token
+        self.endpoint = endpoint
+    }
+}
+
+public struct VoiceParticipantState: Equatable, Sendable {
+    public var userID: UserID
+    public var channelID: ChannelID?
+    public var guildID: GuildID?
+    public var sessionID: String
+    public var isMuted: Bool
+    public var isDeafened: Bool
+    public var isSelfMuted: Bool
+    public var isSelfDeafened: Bool
+    public var isSuppressed: Bool
+    public var isStreaming: Bool
+    public var isVideoEnabled: Bool
+
+    public init(
+        userID: UserID,
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        sessionID: String,
+        isMuted: Bool = false,
+        isDeafened: Bool = false,
+        isSelfMuted: Bool = false,
+        isSelfDeafened: Bool = false,
+        isSuppressed: Bool = false,
+        isStreaming: Bool = false,
+        isVideoEnabled: Bool = false
+    ) {
+        self.userID = userID
+        self.channelID = channelID
+        self.guildID = guildID
+        self.sessionID = sessionID
+        self.isMuted = isMuted
+        self.isDeafened = isDeafened
+        self.isSelfMuted = isSelfMuted
+        self.isSelfDeafened = isSelfDeafened
+        self.isSuppressed = isSuppressed
+        self.isStreaming = isStreaming
+        self.isVideoEnabled = isVideoEnabled
+    }
+}
+
 public enum ClientNonce {
     public static func make(now: Date = .now) -> String {
         let milliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1_000))
@@ -609,5 +677,9 @@ public enum ClientEvent: Equatable, Sendable {
     case messageDeleted(channelID: ChannelID, messageID: MessageID)
     case typing(channelID: ChannelID, user: User)
     case membersChanged(guildID: GuildID, members: [Member])
+    case voiceStateChanged(VoiceParticipantState)
+    /// A nil value means Discord deallocated the current voice server and the
+    /// client must wait for a replacement allocation before reconnecting.
+    case voiceServerChanged(VoiceConnectionInfo?)
     case snapshotChanged(BootstrapSnapshot)
 }

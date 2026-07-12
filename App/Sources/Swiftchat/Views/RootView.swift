@@ -16,12 +16,14 @@ struct RootView: View {
             Divider()
             NavigationSplitView {
                 ChannelSidebarView(
+                    voiceModel: model,
                     channels: model.visibleChannels,
                     selection: $model.selectedChannelID,
                     currentUser: model.snapshot?.currentUser,
                     connectionState: model.connectionState,
                     currentStatus: model.currentStatus,
                     isAuthenticated: model.isAuthenticated,
+                    activeVoiceChannelID: model.activeVoiceChannel?.id,
                     connectAccount: { showLogin = true },
                     logout: { await model.logout() },
                     updateStatus: { await model.updateStatus($0) }
@@ -34,7 +36,7 @@ struct RootView: View {
                         ToolbarItem(id: "channel") {
                             if let channel = model.selectedChannel {
                                 Button { model.showQuickSwitcher = true } label: {
-                                    Label(channel.name, systemImage: channel.kind == .directMessage ? "person.fill" : "number")
+                                    Label(channel.name, systemImage: channelToolbarSymbol(channel))
                                         .labelStyle(.titleAndIcon)
                                 }
                             }
@@ -78,5 +80,15 @@ struct RootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .swiftchatQuickSwitcher)) { _ in model.showQuickSwitcher = true }
         .onReceive(NotificationCenter.default.publisher(for: .swiftchatToggleInspector)) { _ in model.showInspector.toggle() }
+    }
+
+    private func channelToolbarSymbol(_ channel: Channel) -> String {
+        switch channel.kind {
+        case .voice: "speaker.wave.2.fill"
+        case .directMessage, .groupDirectMessage: "person.fill"
+        case .announcement: "megaphone.fill"
+        case .forum: "bubble.left.and.bubble.right.fill"
+        default: "number"
+        }
     }
 }

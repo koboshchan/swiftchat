@@ -20,6 +20,7 @@ public actor DiscordRESTProvider: ChatProvider {
     private var gatewayTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var gatewaySequence: Int?
+    private var gatewayGuildIDs: [GuildID] = []
     private var gatewayReady = false
     private var pendingMemberGuildID: GuildID?
     private var cachedMembers: [GuildID: [Member]] = [:]
@@ -28,6 +29,9 @@ public actor DiscordRESTProvider: ChatProvider {
     private var cachedGuilds: [GuildID: Guild] = [:]
     private var cachedProfiles: [ProfileCacheKey: UserProfile] = [:]
     private var profileEffects: [String: ProfileEffectConfigDTO]?
+    private var pendingVoiceNegotiation: PendingVoiceNegotiation?
+    private var activeVoiceConnection: VoiceConnectionInfo?
+    private var voiceNegotiationTimeoutTask: Task<Void, Never>?
 
     public init(credentials: any CredentialStore, handle: CredentialHandle, session: URLSession = .shared) {
         self.credentials = credentials
@@ -290,6 +294,92 @@ public actor DiscordRESTProvider: ChatProvider {
         continuation?.yield(.messageUpdated(message))
     }
 
+    public func joinVoice(
+        channelID: ChannelID,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool
+    ) async throws -> VoiceConnectionInfo {
+        guard gatewayReady, let userID = currentUser?.id else {
+            throw ChatProviderError.invalidRequest("Discord Gateway is not ready for a voice connection.")
+        }
+        let negotiationID = UUID()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if let pendingVoiceNegotiation {
+                    pendingVoiceNegotiation.continuation.resume(
+                        throwing: ChatProviderError.invalidRequest("A newer voice connection replaced this request.")
+                    )
+                }
+                pendingVoiceNegotiation = PendingVoiceNegotiation(
+                    id: negotiationID,
+                    channelID: channelID,
+                    guildID: guildID,
+                    userID: userID,
+                    selfMute: selfMute,
+                    selfDeaf: selfDeaf,
+                    continuation: continuation
+                )
+                voiceNegotiationTimeoutTask?.cancel()
+                voiceNegotiationTimeoutTask = Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(15))
+                    await self?.failVoiceNegotiation(
+                        id: negotiationID,
+                        error: ChatProviderError.invalidRequest("Discord did not finish voice negotiation in time.")
+                    )
+                }
+                Task { [weak self] in
+                    do {
+                        try await self?.sendVoiceState(
+                            channelID: channelID,
+                            guildID: guildID,
+                            selfMute: selfMute,
+                            selfDeaf: selfDeaf,
+                            selfVideo: false
+                        )
+                    } catch {
+                        await self?.failVoiceNegotiation(id: negotiationID, error: error)
+                    }
+                }
+            }
+        } onCancel: {
+            Task { await self.failVoiceNegotiation(id: negotiationID, error: CancellationError()) }
+        }
+    }
+
+    public func updateVoiceState(
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool,
+        selfVideo: Bool
+    ) async throws {
+        try await sendVoiceState(
+            channelID: channelID,
+            guildID: guildID,
+            selfMute: selfMute,
+            selfDeaf: selfDeaf,
+            selfVideo: selfVideo
+        )
+        if channelID == nil { activeVoiceConnection = nil }
+    }
+
+    private func sendVoiceState(
+        channelID: ChannelID?,
+        guildID: GuildID?,
+        selfMute: Bool,
+        selfDeaf: Bool,
+        selfVideo: Bool
+    ) async throws {
+        try await sendGateway(DiscordGatewayPayloadFactory.voiceStateUpdate(
+            guildID: guildID,
+            channelID: channelID,
+            selfMute: selfMute,
+            selfDeaf: selfDeaf,
+            selfVideo: selfVideo
+        ))
+    }
+
     public func eventStream() async -> AsyncStream<ClientEvent> {
         let stream = AsyncStream<ClientEvent>.makeStream(bufferingPolicy: .bufferingNewest(500))
         continuation = stream.continuation
@@ -297,6 +387,12 @@ public actor DiscordRESTProvider: ChatProvider {
     }
 
     public func disconnect() async {
+        voiceNegotiationTimeoutTask?.cancel()
+        if let pendingVoiceNegotiation {
+            pendingVoiceNegotiation.continuation.resume(throwing: CancellationError())
+            self.pendingVoiceNegotiation = nil
+        }
+        activeVoiceConnection = nil
         gatewayTask?.cancel()
         heartbeatTask?.cancel()
         webSocket?.cancel(with: .goingAway, reason: nil)
@@ -417,10 +513,40 @@ public actor DiscordRESTProvider: ChatProvider {
         guard JSONSerialization.isValidJSONObject(body), let data = try? JSONSerialization.data(withJSONObject: body) else { return }
         switch name {
         case "READY", "RESUMED":
+            if name == "READY",
+               let ready = try? JSONDecoder().decode(GatewayReadyGuildsDTO.self, from: data) {
+                gatewayGuildIDs = ready.guilds.compactMap { GuildID($0.id) }
+                var voiceStateCount = 0
+                for guild in ready.guilds {
+                    let guildID = GuildID(guild.id)
+                    for state in guild.voiceStates {
+                        guard let participant = state.domain(defaultGuildID: guildID) else { continue }
+                        voiceStateCount += 1
+                        continuation?.yield(.voiceStateChanged(participant))
+                    }
+                }
+                if voiceStateCount > 0 {
+                    gatewayLogger.info("Ready voice-state snapshot received; count=\(voiceStateCount)")
+                }
+            }
             gatewayReady = true
             gatewayLogger.info("Gateway session ready")
             continuation?.yield(.connectionChanged(.ready))
             if let pendingMemberGuildID { await attemptMemberSubscription(guildID: pendingMemberGuildID) }
+        case "READY_SUPPLEMENTAL":
+            let states = ReadySupplementalVoiceStateResolver.resolve(
+                data: data,
+                gatewayGuildIDs: gatewayGuildIDs
+            )
+            for state in states { continuation?.yield(.voiceStateChanged(state)) }
+            gatewayLogger.info("Supplemental voice-state snapshot received; count=\(states.count)")
+        case "GUILD_CREATE":
+            guard let snapshot = try? JSONDecoder().decode(GuildVoiceStateSnapshotDTO.self, from: data) else {
+                return
+            }
+            let states = snapshot.domainVoiceStates
+            gatewayLogger.info("Initial voice-state snapshot received; guild=\(snapshot.id, privacy: .public), count=\(states.count)")
+            for state in states { continuation?.yield(.voiceStateChanged(state)) }
         case "MESSAGE_CREATE":
             if let dto = try? JSONDecoder().decode(MessageDTO.self, from: data), let message = try? dto.domain() {
                 cachedMessages[message.id] = message
@@ -485,9 +611,72 @@ public actor DiscordRESTProvider: ChatProvider {
             if guildID == pendingMemberGuildID {
                 continuation?.yield(.membersChanged(guildID: guildID, members: members))
             }
+        case "VOICE_STATE_UPDATE":
+            guard let state = try? JSONDecoder().decode(VoiceStateUpdateDTO.self, from: data),
+                  let participant = state.domain() else { return }
+            continuation?.yield(.voiceStateChanged(participant))
+            if participant.userID == currentUser?.id {
+                if participant.channelID == nil {
+                    activeVoiceConnection = nil
+                } else if participant.channelID == activeVoiceConnection?.channelID {
+                    activeVoiceConnection?.sessionID = participant.sessionID
+                }
+            }
+            if participant.userID == currentUser?.id,
+               participant.channelID == pendingVoiceNegotiation?.channelID {
+                pendingVoiceNegotiation?.sessionID = participant.sessionID
+                finishVoiceNegotiationIfReady()
+            }
+        case "VOICE_SERVER_UPDATE":
+            guard let update = try? JSONDecoder().decode(VoiceServerUpdateDTO.self, from: data) else { return }
+            if let pending = pendingVoiceNegotiation, update.matches(guildID: pending.guildID) {
+                pendingVoiceNegotiation?.token = update.token
+                pendingVoiceNegotiation?.endpoint = update.resolvedEndpoint
+                finishVoiceNegotiationIfReady()
+                return
+            }
+            guard let activeVoiceConnection,
+                  let resolution = VoiceServerMigrationResolver.resolve(
+                      update: update,
+                      activeConnection: activeVoiceConnection
+                  ) else { return }
+            switch resolution {
+            case .waitForAllocation:
+                continuation?.yield(.voiceServerChanged(nil))
+            case let .reconnect(info):
+                self.activeVoiceConnection = info
+                continuation?.yield(.voiceServerChanged(info))
+            }
         default:
             break
         }
+    }
+
+    private func finishVoiceNegotiationIfReady() {
+        guard let pending = pendingVoiceNegotiation,
+              let sessionID = pending.sessionID,
+              let token = pending.token,
+              let endpoint = pending.endpoint else { return }
+        voiceNegotiationTimeoutTask?.cancel()
+        pendingVoiceNegotiation = nil
+        let info = VoiceConnectionInfo(
+            serverID: pending.guildID?.description ?? pending.channelID.description,
+            channelID: pending.channelID,
+            guildID: pending.guildID,
+            userID: pending.userID,
+            sessionID: sessionID,
+            token: token,
+            endpoint: endpoint
+        )
+        activeVoiceConnection = info
+        pending.continuation.resume(returning: info)
+    }
+
+    private func failVoiceNegotiation(id: UUID, error: any Error) {
+        guard let pending = pendingVoiceNegotiation, pending.id == id else { return }
+        voiceNegotiationTimeoutTask?.cancel()
+        pendingVoiceNegotiation = nil
+        pending.continuation.resume(throwing: error)
     }
 
     private func applyMemberListOperations(_ operations: [GuildMemberListUpdateDTO.Operation], guildID: GuildID) {
@@ -1248,6 +1437,214 @@ enum DiscordGatewayPayloadFactory {
                 ],
             ] as [String: Any],
         ]
+    }
+
+    static func voiceStateUpdate(
+        guildID: GuildID?,
+        channelID: ChannelID?,
+        selfMute: Bool,
+        selfDeaf: Bool,
+        selfVideo: Bool = false
+    ) -> [String: Any] {
+        [
+            "op": 4,
+            "d": [
+                "guild_id": guildID?.description ?? NSNull(),
+                "channel_id": channelID?.description ?? NSNull(),
+                "self_mute": selfMute,
+                "self_deaf": selfDeaf,
+                "self_video": selfVideo,
+                "self_stream": false,
+            ] as [String: Any],
+        ]
+    }
+}
+
+private struct PendingVoiceNegotiation {
+    var id: UUID
+    var channelID: ChannelID
+    var guildID: GuildID?
+    var userID: UserID
+    var selfMute: Bool
+    var selfDeaf: Bool
+    var sessionID: String?
+    var token: String?
+    var endpoint: String?
+    var continuation: CheckedContinuation<VoiceConnectionInfo, any Error>
+}
+
+struct VoiceStateUpdateDTO: Decodable {
+    var userID: String
+    var channelID: String?
+    var guildID: String?
+    var sessionID: String
+    var mute: Bool?
+    var deaf: Bool?
+    var selfMute: Bool?
+    var selfDeaf: Bool?
+    var suppress: Bool?
+    var selfStream: Bool?
+    var selfVideo: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case userID = "user_id"
+        case channelID = "channel_id"
+        case guildID = "guild_id"
+        case sessionID = "session_id"
+        case mute, deaf, suppress
+        case selfMute = "self_mute"
+        case selfDeaf = "self_deaf"
+        case selfStream = "self_stream"
+        case selfVideo = "self_video"
+    }
+
+    func domain(defaultGuildID: GuildID? = nil) -> VoiceParticipantState? {
+        guard let userID = UserID(userID) else { return nil }
+        return VoiceParticipantState(
+            userID: userID,
+            channelID: channelID.flatMap(ChannelID.init),
+            guildID: guildID.flatMap(GuildID.init) ?? defaultGuildID,
+            sessionID: sessionID,
+            isMuted: mute ?? false,
+            isDeafened: deaf ?? false,
+            isSelfMuted: selfMute ?? false,
+            isSelfDeafened: selfDeaf ?? false,
+            isSuppressed: suppress ?? false,
+            isStreaming: selfStream ?? false,
+            isVideoEnabled: selfVideo ?? false
+        )
+    }
+}
+
+struct GuildVoiceStateSnapshotDTO: Decodable {
+    var id: String
+    var voiceStates: LossyList<VoiceStateUpdateDTO>
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case voiceStates = "voice_states"
+    }
+
+    var domainVoiceStates: [VoiceParticipantState] {
+        let guildID = GuildID(id)
+        return voiceStates.elements.compactMap { $0.domain(defaultGuildID: guildID) }
+    }
+}
+
+struct GatewayReadyGuildsDTO: Decodable {
+    struct GuildReference: Decodable {
+        var id: String
+        var voiceStates: [VoiceStateUpdateDTO]
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case voiceStates = "voice_states"
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            voiceStates = try container.decodeIfPresent(
+                LossyList<VoiceStateUpdateDTO>.self,
+                forKey: .voiceStates
+            )?.elements ?? []
+        }
+    }
+    var guilds: [GuildReference]
+}
+
+enum ReadySupplementalVoiceStateResolver {
+    static func resolve(data: Data, gatewayGuildIDs: [GuildID]) -> [VoiceParticipantState] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        var resolved: [VoiceParticipantState] = []
+
+        func append(rawStates: Any, fallbackGuildID: GuildID?) {
+            guard let values = rawStates as? [Any] else { return }
+            for value in values where JSONSerialization.isValidJSONObject(value) {
+                guard let data = try? JSONSerialization.data(withJSONObject: value),
+                      let dto = try? JSONDecoder().decode(VoiceStateUpdateDTO.self, from: data),
+                      let state = dto.domain(defaultGuildID: fallbackGuildID) else { continue }
+                resolved.append(state)
+            }
+        }
+
+        let merged = root["merged_voice_states"]
+        if let object = merged as? [String: Any] {
+            if let batches = object["guilds"] as? [Any] {
+                for (index, batch) in batches.enumerated() {
+                    append(
+                        rawStates: batch,
+                        fallbackGuildID: gatewayGuildIDs.indices.contains(index) ? gatewayGuildIDs[index] : nil
+                    )
+                }
+            } else if let keyed = object["guilds"] as? [String: Any] {
+                for (guildID, batch) in keyed { append(rawStates: batch, fallbackGuildID: GuildID(guildID)) }
+            } else {
+                for (guildID, batch) in object { append(rawStates: batch, fallbackGuildID: GuildID(guildID)) }
+            }
+        } else if let batches = merged as? [Any] {
+            for (index, batch) in batches.enumerated() {
+                append(
+                    rawStates: batch,
+                    fallbackGuildID: gatewayGuildIDs.indices.contains(index) ? gatewayGuildIDs[index] : nil
+                )
+            }
+        }
+
+        if let guilds = root["guilds"] as? [[String: Any]] {
+            for guild in guilds {
+                append(rawStates: guild["voice_states"] as Any, fallbackGuildID: (guild["id"] as? String).flatMap(GuildID.init))
+            }
+        }
+
+        var byUserID: [UserID: VoiceParticipantState] = [:]
+        for state in resolved { byUserID[state.userID] = state }
+        return Array(byUserID.values)
+    }
+}
+
+struct VoiceServerUpdateDTO: Decodable {
+    var token: String
+    var guildID: String?
+    var endpoint: String?
+
+    enum CodingKeys: String, CodingKey {
+        case token, endpoint
+        case guildID = "guild_id"
+    }
+
+    func matches(guildID: GuildID?) -> Bool {
+        switch (self.guildID, guildID) {
+        case (nil, nil): true
+        case let (value?, guildID?): value == guildID.description
+        default: false
+        }
+    }
+
+    var resolvedEndpoint: String? {
+        guard let endpoint, !endpoint.isEmpty else { return nil }
+        return endpoint
+    }
+}
+
+enum VoiceServerMigrationResolution: Equatable {
+    case waitForAllocation
+    case reconnect(VoiceConnectionInfo)
+}
+
+enum VoiceServerMigrationResolver {
+    static func resolve(
+        update: VoiceServerUpdateDTO,
+        activeConnection: VoiceConnectionInfo
+    ) -> VoiceServerMigrationResolution? {
+        guard update.matches(guildID: activeConnection.guildID) else { return nil }
+        guard let endpoint = update.resolvedEndpoint else { return .waitForAllocation }
+
+        var replacement = activeConnection
+        replacement.token = update.token
+        replacement.endpoint = endpoint
+        guard replacement != activeConnection else { return nil }
+        return .reconnect(replacement)
     }
 }
 
