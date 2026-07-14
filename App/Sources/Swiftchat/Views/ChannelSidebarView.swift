@@ -124,11 +124,7 @@ private struct GuildHeaderIcon: View {
     var body: some View {
         Group {
             if let iconURL = guild.iconURL {
-                AsyncImage(url: iconURL) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    initials
-                }
+                AnimatedRemoteImage(url: iconURL)
             } else {
                 initials
             }

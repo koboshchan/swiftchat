@@ -49,6 +49,7 @@ public struct User: Identifiable, Codable, Hashable, Sendable {
     public var primaryGuild: PrimaryGuildIdentity?
     public var displayNameStyle: DisplayNameStyle?
     public var publicFlags: UInt64
+    public var premiumType: Int
 
     public init(
         id: UserID,
@@ -60,7 +61,8 @@ public struct User: Identifiable, Codable, Hashable, Sendable {
         nameplate: Nameplate? = nil,
         primaryGuild: PrimaryGuildIdentity? = nil,
         displayNameStyle: DisplayNameStyle? = nil,
-        publicFlags: UInt64 = 0
+        publicFlags: UInt64 = 0,
+        premiumType: Int = 0
     ) {
         self.id = id
         self.username = username
@@ -72,11 +74,12 @@ public struct User: Identifiable, Codable, Hashable, Sendable {
         self.primaryGuild = primaryGuild
         self.displayNameStyle = displayNameStyle
         self.publicFlags = publicFlags
+        self.premiumType = premiumType
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, username, displayName, avatarURL, isBot, avatarDecorationURL, nameplate
-        case primaryGuild, displayNameStyle, publicFlags
+        case primaryGuild, displayNameStyle, publicFlags, premiumType
     }
 
     public init(from decoder: Decoder) throws {
@@ -91,6 +94,7 @@ public struct User: Identifiable, Codable, Hashable, Sendable {
         primaryGuild = try container.decodeIfPresent(PrimaryGuildIdentity.self, forKey: .primaryGuild)
         displayNameStyle = try container.decodeIfPresent(DisplayNameStyle.self, forKey: .displayNameStyle)
         publicFlags = try container.decodeIfPresent(UInt64.self, forKey: .publicFlags) ?? 0
+        premiumType = try container.decodeIfPresent(Int.self, forKey: .premiumType) ?? 0
     }
 }
 
@@ -107,6 +111,49 @@ public struct Guild: Identifiable, Codable, Hashable, Sendable {
         self.iconURL = iconURL
         self.accentHex = accentHex
         self.unreadCount = unreadCount
+    }
+}
+
+public struct DiscordEmoji: Identifiable, Codable, Hashable, Sendable {
+    public let id: String
+    public var name: String
+    public var isAnimated: Bool
+    public var guildID: GuildID
+    public var isAvailable: Bool
+
+    public init(
+        id: String,
+        name: String,
+        isAnimated: Bool = false,
+        guildID: GuildID,
+        isAvailable: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.isAnimated = isAnimated
+        self.guildID = guildID
+        self.isAvailable = isAvailable
+    }
+
+    public var messageToken: String { "<\(isAnimated ? "a" : ""):\(name):\(id)>" }
+    public var reactionToken: String { "\(name):\(id)" }
+
+    public var imageURL: URL? {
+        URL(string: "https://cdn.discordapp.com/emojis/\(id).webp?size=96&animated=\(isAnimated ? "true" : "false")")
+    }
+
+    public var linkedImageMarkdown: String {
+        "[\(name)](https://cdn.discordapp.com/emojis/\(id).\(isAnimated ? "gif" : "webp")?size=48&animated=\(isAnimated ? "true" : "false")&name=\(name)&lossless=true)"
+    }
+}
+
+public struct EmojiUserSettings: Equatable, Sendable {
+    public var favoriteKeys: Set<String>
+    public var usageScores: [String: Int]
+
+    public init(favoriteKeys: Set<String> = [], usageScores: [String: Int] = [:]) {
+        self.favoriteKeys = favoriteKeys
+        self.usageScores = usageScores
     }
 }
 

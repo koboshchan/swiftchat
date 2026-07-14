@@ -9,7 +9,7 @@ struct AvatarView: View {
         ZStack {
             Circle().fill(Color.accentColor.gradient)
             if let url {
-                AsyncImage(url: url) { image in image.resizable().scaledToFill() } placeholder: { fallback }
+                AnimatedRemoteImage(url: url)
             } else { fallback }
         }
         .frame(width: size, height: size)
@@ -21,4 +21,3 @@ struct AvatarView: View {
         Text(name.prefix(1).uppercased()).font(.system(size: size * 0.42, weight: .semibold))
     }
 }
-

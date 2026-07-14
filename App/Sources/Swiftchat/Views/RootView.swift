@@ -13,6 +13,7 @@ struct RootView: View {
                 guilds: model.snapshot?.guilds ?? [], selectedGuildID: model.selectedGuildID,
                 selectHome: { model.selectGuild(nil) }, selectGuild: model.selectGuild
             )
+            .zIndex(200)
             Divider()
             NavigationSplitView {
                 ChannelSidebarView(

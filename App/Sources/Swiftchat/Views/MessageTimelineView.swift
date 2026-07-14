@@ -21,6 +21,7 @@ struct MessageTimelineView: View {
                     }
                     ForEach(model.messageRows) { row in
                         MessageRowView(
+                            model: model,
                             message: row.message,
                             startsGroup: row.startsGroup,
                             replyPreview: row.replyPreview,

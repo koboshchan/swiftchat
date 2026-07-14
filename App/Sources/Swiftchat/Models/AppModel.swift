@@ -47,6 +47,13 @@ final class AppModel {
     private(set) var voiceErrorMessage: String?
     private(set) var voiceStates: [UserID: VoiceParticipantState] = [:]
     private(set) var mediaDevices = MediaDeviceCatalog.snapshot()
+    private(set) var emojisByGuild: [GuildID: [DiscordEmoji]] = [:]
+    private(set) var loadingEmojiGuildIDs: Set<GuildID> = []
+    private(set) var emojiLoadErrorsByGuild: [GuildID: String] = [:]
+    private(set) var favoriteEmojiKeys: Set<String>
+    private(set) var emojiUsageCounts: [String: Int]
+    private(set) var discordFavoriteEmojiKeys: Set<String> = []
+    private(set) var discordEmojiUsageScores: [String: Int] = [:]
     var isVoiceMuted = UserDefaults.standard.bool(forKey: "voiceMuted")
     var isVoiceDeafened = UserDefaults.standard.bool(forKey: "voiceDeafened")
     var isCameraEnabled = false
@@ -82,16 +89,26 @@ final class AppModel {
     @ObservationIgnored private var messageCache: [ChannelID: [Message]] = [:]
     @ObservationIgnored private var hasMoreCache: [ChannelID: Bool] = [:]
     @ObservationIgnored private let restoreStoredSession: Bool
+    @ObservationIgnored private let discordNetworkDisabled: Bool
     @ObservationIgnored private var didAttemptSessionRestore = false
     @ObservationIgnored private var credentialHandle: CredentialHandle?
+    @ObservationIgnored private var didAttemptDiscordEmojiSettings = false
 
     init(provider: any ChatProvider = MockChatProvider(), restoreStoredSession: Bool = true) {
         self.provider = provider
-        self.restoreStoredSession = restoreStoredSession
+        discordNetworkDisabled = CommandLine.arguments.contains("--offline")
+            || ProcessInfo.processInfo.environment["SWIFTCHAT_DISABLE_DISCORD_NETWORK"] == "1"
+        self.restoreStoredSession = restoreStoredSession && !discordNetworkDisabled
+        favoriteEmojiKeys = Set(UserDefaults.standard.stringArray(forKey: "dev.swiftchat.favorite-emojis") ?? [])
+        emojiUsageCounts = UserDefaults.standard.dictionary(forKey: "dev.swiftchat.emoji-usage") as? [String: Int] ?? [:]
         database = try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
     }
 
     func connectAuthenticatedAccount(_ handle: CredentialHandle) async -> Bool {
+        guard !discordNetworkDisabled else {
+            errorMessage = "Discord networking is disabled in offline UI mode."
+            return false
+        }
         await leaveVoice()
         await provider.disconnect()
         eventTask?.cancel()
@@ -99,6 +116,10 @@ final class AppModel {
         credentialHandle = handle
         database = AccountID(handle.accountID).flatMap { try? SwiftchatDatabase(accountID: $0) }
         snapshot = nil
+        emojisByGuild = [:]
+        loadingEmojiGuildIDs = []
+        emojiLoadErrorsByGuild = [:]
+        didAttemptDiscordEmojiSettings = false
         voiceStates = [:]
         visibleChannels = []
         selectedChannel = nil
@@ -131,6 +152,10 @@ final class AppModel {
         provider = MockChatProvider()
         database = try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
         snapshot = nil
+        emojisByGuild = [:]
+        loadingEmojiGuildIDs = []
+        emojiLoadErrorsByGuild = [:]
+        didAttemptDiscordEmojiSettings = false
         voiceStates = [:]
         visibleChannels = []
         selectedChannel = nil
@@ -210,6 +235,49 @@ final class AppModel {
             selectedChannelID = visibleChannels.first(where: { $0.name == "general" })?.id ?? visibleChannels.first?.id
         }
         beginMemberLoad(for: guildID)
+    }
+
+    func loadEmojis(for guildID: GuildID) async {
+        guard emojisByGuild[guildID] == nil, !loadingEmojiGuildIDs.contains(guildID) else { return }
+        loadingEmojiGuildIDs.insert(guildID)
+        defer { loadingEmojiGuildIDs.remove(guildID) }
+        do {
+            emojisByGuild[guildID] = try await provider.emojis(in: guildID)
+            emojiLoadErrorsByGuild[guildID] = nil
+        } catch {
+            emojiLoadErrorsByGuild[guildID] = error.localizedDescription
+        }
+    }
+
+    func retryEmojis(for guildID: GuildID) async {
+        emojisByGuild[guildID] = nil
+        emojiLoadErrorsByGuild[guildID] = nil
+        await loadEmojis(for: guildID)
+    }
+
+    func loadDiscordEmojiSettings() async {
+        guard !didAttemptDiscordEmojiSettings else { return }
+        didAttemptDiscordEmojiSettings = true
+        guard let settings = try? await provider.emojiUserSettings() else { return }
+        discordFavoriteEmojiKeys = settings.favoriteKeys
+        discordEmojiUsageScores = settings.usageScores
+    }
+
+    func recordEmojiUse(_ key: String) {
+        emojiUsageCounts[key, default: 0] += 1
+        UserDefaults.standard.set(emojiUsageCounts, forKey: "dev.swiftchat.emoji-usage")
+    }
+
+    func toggleFavoriteEmoji(_ key: String) {
+        if favoriteEmojiKeys.contains(key) { favoriteEmojiKeys.remove(key) }
+        else { favoriteEmojiKeys.insert(key) }
+        UserDefaults.standard.set(Array(favoriteEmojiKeys), forKey: "dev.swiftchat.favorite-emojis")
+    }
+
+    func composerText(for emoji: DiscordEmoji) -> String {
+        let hasNitro = (snapshot?.currentUser.premiumType ?? 0) > 0
+        if emoji.guildID != selectedGuildID, !hasNitro { return emoji.linkedImageMarkdown }
+        return emoji.messageToken
     }
 
     private func beginMemberLoad(for guildID: GuildID?) {
@@ -693,6 +761,17 @@ final class AppModel {
             dismissProfile()
             return
         }
+        presentProfile(for: member)
+    }
+
+    func showProfile(for user: User) {
+        showInspector = true
+        let member = members.first(where: { $0.id == user.id })
+            ?? Member(user: user, roleName: "Member", status: .offline)
+        presentProfile(for: member)
+    }
+
+    private func presentProfile(for member: Member) {
         profileTask?.cancel()
         selectedMember = member
         selectedProfile = nil

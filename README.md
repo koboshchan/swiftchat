@@ -1,10 +1,11 @@
-# Swiftchat
+# SwiftChat
 
-Swiftchat is a native macOS 27 Discord-client research project written in Swift 6.4 and SwiftUI. It includes an interactive demo provider and an experimental native account provider.
+SwiftChat is a native macOS 27 Discord-client research project written in Swift 6.4 and SwiftUI. It includes an interactive demo provider and an experimental native account provider.
 
 ## Important warning
 
-Swiftchat is unofficial and is not affiliated with Discord. Discord does not support third-party normal-account clients, and using session credentials outside its supported bot/OAuth APIs may result in account termination. The embedded login captures the authenticated web session, validates it, stores it in the device-only macOS Keychain, and destroys its nonpersistent WebKit data.
+DO NOT USE THIS CLIENT IN IT’S CURRENT STATE, SOME ACTIONS LIKE DMING AT ALL OR LOADING EMOJIS MAY GET YOUR ACCOUNT TEMPORARILY DISABLED (THIS HAS HAS HAPPENED TWICE). USE AT YOUR OWN RISK.
+SwiftChat is unofficial and is not affiliated with Discord. Discord does not support third-party normal-account clients, and using session credentials outside its supported bot/OAuth APIs may result in account termination.
 
 ## What works now
 
@@ -23,7 +24,7 @@ Requirements: macOS 27 and Xcode 27.
 ./script/build_and_run.sh
 ```
 
-Use `--verify`, `--debug`, `--logs`, or `--telemetry` for the corresponding run mode. The Xcode workspace is `Swiftchat.xcworkspace`.
+Use `--verify`, `--debug`, `--logs`, or `--telemetry` for the corresponding run mode. The Xcode workspace is `SwiftChat.xcworkspace`.
 
 ## Tests
 

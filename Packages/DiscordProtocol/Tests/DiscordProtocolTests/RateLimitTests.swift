@@ -3,6 +3,18 @@ import Foundation
 import Testing
 @testable import DiscordProtocol
 
+@Test func retryAfterNeverTruncatesDiscordsCooldown() throws {
+    let url = try #require(URL(string: "https://discord.com/api/v9/users/@me"))
+    let response = try #require(HTTPURLResponse(
+        url: url,
+        statusCode: 429,
+        httpVersion: "HTTP/1.1",
+        headerFields: ["Retry-After": "300"]
+    ))
+
+    #expect(DiscordRESTProvider.retryAfter(from: Data("{}".utf8), response: response) >= 300.25)
+}
+
 @Test func bootstrapRetries429AndDoesNotBurstGuildChannelRequests() async throws {
     RateLimitURLProtocol.reset()
     let configuration = URLSessionConfiguration.ephemeral

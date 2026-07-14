@@ -65,7 +65,19 @@ struct ComposerView: View {
                         Button { showGIFPicker.toggle() } label: { Text("GIF").font(.caption.bold()).padding(4).overlay(RoundedRectangle(cornerRadius: 4).stroke()) }
                             .buttonStyle(.plain).popover(isPresented: $showGIFPicker) { GIFURLPicker { attachments.append($0); showGIFPicker = false } }
                         Button { showEmojiPicker.toggle() } label: { Image(systemName: "face.smiling.fill").font(.title3) }
-                            .buttonStyle(.plain).popover(isPresented: $showEmojiPicker) { EmojiPicker { model.updateDraft(model.draft + $0); showEmojiPicker = false } }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: $showEmojiPicker) {
+                                EmojiPickerView(model: model) { selection in
+                                    switch selection {
+                                    case let .native(value):
+                                        model.updateDraft(model.draft + value)
+                                    case let .custom(emoji):
+                                        let value = model.composerText(for: emoji)
+                                        let separator = model.draft.isEmpty || model.draft.last?.isWhitespace == true ? "" : " "
+                                        model.updateDraft(model.draft + separator + value)
+                                    }
+                                }
+                            }
                         Button(action: send) {
                             Image(systemName: "arrow.up")
                                 .font(.body.weight(.bold))
@@ -97,17 +109,6 @@ struct ComposerView: View {
         let staged = attachments
         attachments.removeAll()
         Task { await model.send(attachments: staged) }
-    }
-}
-
-private struct EmojiPicker: View {
-    let select: (String) -> Void
-    private let emojis = ["😀", "😂", "😍", "🤔", "😅", "😭", "🔥", "✨", "👍", "👀", "❤️", "🎉", "💻", "🍎", "🐈", "🦈"]
-    var body: some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.fixed(34)), count: 8), spacing: 6) {
-            ForEach(emojis, id: \.self) { emoji in Button(emoji) { select(emoji) }.buttonStyle(.plain).font(.title2) }
-        }
-        .padding().frame(width: 330)
     }
 }
 

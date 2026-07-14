@@ -86,6 +86,21 @@ public actor MockChatProvider: ChatProvider {
 
     public func members(in guildID: GuildID?) async throws -> [Member] { snapshot.members }
 
+    public func emojis(in guildID: GuildID) async throws -> [DiscordEmoji] {
+        guard snapshot.guilds.contains(where: { $0.id == guildID }) else { return [] }
+        if guildID == GuildID(rawValue: 100) {
+            return [
+                DiscordEmoji(id: "1512441939348295841", name: "swift_parrot", isAnimated: true, guildID: guildID),
+                DiscordEmoji(id: "1512441939348295842", name: "blob_wave", guildID: guildID),
+                DiscordEmoji(id: "1512441939348295843", name: "mac_happy", guildID: guildID),
+            ]
+        }
+        return [
+            DiscordEmoji(id: "1512441939348295851", name: "swiftchat", guildID: guildID),
+            DiscordEmoji(id: "1512441939348295852", name: "ship_it", isAnimated: true, guildID: guildID),
+        ]
+    }
+
     public func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
         guard let member = snapshot.members.first(where: { $0.id == userID }) else {
             throw ChatProviderError.invalidRequest("That demo profile is unavailable.")

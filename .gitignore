@@ -11,5 +11,11 @@ xcuserdata/
 *.db-wal
 *.token
 *.cookies
+.env
+.env.*
+.secrets/
+*.pem
+*.key
+*.p12
+*.mobileprovision
 Package.resolved
-

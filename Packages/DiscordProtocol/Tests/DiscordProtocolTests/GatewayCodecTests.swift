@@ -17,6 +17,57 @@ import Testing
     #expect(baseline.defaultCapabilities == 1_734_653)
 }
 
+@Test func settingsProtoPreservesDiscordGuildFolderOrder() {
+    func fixed64(_ value: UInt64) -> [UInt8] {
+        (0..<8).map { UInt8(truncatingIfNeeded: value >> UInt64($0 * 8)) }
+    }
+    func folder(_ ids: [UInt64]) -> [UInt8] {
+        let packed = ids.flatMap(fixed64)
+        return [0x0a, UInt8(packed.count)] + packed
+    }
+    let firstFolder = folder([300, 100])
+    let standalone = folder([200])
+    let guildFolders = [0x0a, UInt8(firstFolder.count)] + firstFolder
+        + [0x0a, UInt8(standalone.count)] + standalone
+    let topLevel = Data([0x72, UInt8(guildFolders.count)] + guildFolders)
+
+    #expect(DiscordSettingsProto.guildOrder(from: topLevel) == [
+        GuildID(rawValue: 300), GuildID(rawValue: 100), GuildID(rawValue: 200),
+    ])
+}
+
+@Test func settingsProtoKeepsFolderOrderWhenPositionsContainAnUnlistedGuild() {
+    func fixed64(_ value: UInt64) -> [UInt8] {
+        (0..<8).map { UInt8(truncatingIfNeeded: value >> UInt64($0 * 8)) }
+    }
+    func folder(_ ids: [UInt64]) -> [UInt8] {
+        let packed = ids.flatMap(fixed64)
+        return [0x0a, UInt8(packed.count)] + packed
+    }
+
+    let folderPayload = folder([300, 100, 200])
+    let completePositions = [400, 300, 100, 200].flatMap(fixed64)
+    let guildFolders = [0x0a, UInt8(folderPayload.count)] + folderPayload
+        + [0x12, UInt8(completePositions.count)] + completePositions
+    let topLevel = Data([0x72, UInt8(guildFolders.count)] + guildFolders)
+
+    #expect(DiscordSettingsProto.guildOrder(from: topLevel) == [
+        GuildID(rawValue: 300), GuildID(rawValue: 100), GuildID(rawValue: 200),
+    ])
+}
+
+@Test func guildsMissingFromSettingsAppearAboveTheStoredSequence() {
+    let stored = Guild(id: GuildID(rawValue: 100), name: "Stored")
+    let newlyCreated = Guild(id: GuildID(rawValue: 400), name: "Testing Server 2")
+    let olderUnlisted = Guild(id: GuildID(rawValue: 300), name: "Older unlisted")
+
+    #expect(DiscordRESTProvider.applyingGuildOrder(
+        [stored.id], to: [stored, olderUnlisted, newlyCreated]
+    ).map(\.id) == [
+        newlyCreated.id, olderUnlisted.id, stored.id,
+    ])
+}
+
 @Test func guildMemberSubscriptionMatchesCurrentDiscordBulkShape() throws {
     let payload = DiscordGatewayPayloadFactory.guildSubscriptions(
         guildID: GuildID(rawValue: 100),

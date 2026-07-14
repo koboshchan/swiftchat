@@ -53,6 +53,7 @@ PLIST
 codesign --force --sign - --entitlements "$ROOT_DIR/Config/Swiftchat.entitlements" "$APP_BUNDLE" >/dev/null
 
 open_app() { /usr/bin/open -n "$APP_BUNDLE"; }
+open_offline_app() { /usr/bin/open -n "$APP_BUNDLE" --args --offline; }
 
 case "$MODE" in
   package) ;;
@@ -67,9 +68,11 @@ case "$MODE" in
     /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\""
     ;;
   --verify|verify)
-    open_app
+    # Verification must never touch a stored Discord credential or the live API.
+    open_offline_app
     sleep 2
     pgrep -x "$APP_NAME" >/dev/null
     ;;
-  *) echo "usage: $0 [package|run|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
+  --offline|offline) open_offline_app ;;
+  *) echo "usage: $0 [package|run|--offline|--debug|--logs|--telemetry|--verify]" >&2; exit 2 ;;
 esac

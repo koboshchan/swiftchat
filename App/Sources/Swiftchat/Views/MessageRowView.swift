@@ -5,6 +5,7 @@ import AppKit
 import SwiftUI
 
 struct MessageRowView: View, Equatable {
+    let model: AppModel
     let message: Message
     let startsGroup: Bool
     let replyPreview: MessageReplyPreview?
@@ -19,7 +20,8 @@ struct MessageRowView: View, Equatable {
     @FocusState private var editFieldFocused: Bool
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.message == rhs.message
+        lhs.model === rhs.model
+            && lhs.message == rhs.message
             && lhs.startsGroup == rhs.startsGroup
             && lhs.replyPreview == rhs.replyPreview
             && lhs.canEdit == rhs.canEdit
@@ -28,17 +30,17 @@ struct MessageRowView: View, Equatable {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if let replyPreview {
-                MessageReplyContext(preview: replyPreview)
+                MessageReplyContext(model: model, preview: replyPreview)
             }
             HStack(alignment: .top, spacing: 12) {
                 MessageAvatarColumn(
+                    model: model,
                     startsGroup: startsGroup,
-                    authorName: message.author.displayName,
-                    avatarURL: message.author.avatarURL,
+                    author: message.author,
                     timestamp: message.timestamp
                 )
                 VStack(alignment: .leading, spacing: 4) {
-                    if startsGroup { MessageAuthorLine(message: message) }
+                    if startsGroup { MessageAuthorLine(model: model, message: message) }
                     MessageContent(
                         message: message,
                         isEditing: $isEditing,
@@ -60,6 +62,7 @@ struct MessageRowView: View, Equatable {
         .overlay(alignment: .topTrailing) {
             if isHovering, !isEditing {
                 MessageActionCapsule(
+                    model: model,
                     canEdit: canEdit,
                     edit: beginEditing,
                     reply: reply,
@@ -269,6 +272,7 @@ private final class MessageContextMenuHitView: NSView {
 }
 
 private struct MessageActionCapsule: View {
+    let model: AppModel
     let canEdit: Bool
     let edit: () -> Void
     let reply: () -> Void
@@ -279,7 +283,7 @@ private struct MessageActionCapsule: View {
     var body: some View {
         GlassEffectContainer(spacing: 0) {
             HStack(spacing: 1) {
-                ReactionActionMenu(react: react)
+                ReactionActionMenu(model: model, react: react)
                 MessageActionButton(systemImage: "arrowshape.turn.up.left", help: "Reply", action: reply)
                 if canEdit {
                     MessageActionButton(systemImage: "pencil", help: "Edit message", action: edit)
@@ -328,28 +332,33 @@ private struct MessageActionButton: View {
 }
 
 private struct ReactionActionMenu: View {
+    let model: AppModel
     let react: (String) -> Void
     @State private var isHovering = false
+    @State private var isPickerPresented = false
 
     var body: some View {
         ZStack {
             Circle()
                 .fill(isHovering ? Color.primary.opacity(0.14) : .clear)
 
-            Menu {
-                ForEach(["👍", "❤️", "😂", "🔥", "🎉", "👀"], id: \.self) { emoji in
-                    Button(emoji) { react(emoji) }
-                }
-            } label: {
+            Button { isPickerPresented.toggle() } label: {
                 Image(systemName: "face.smiling")
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.primary)
                     .frame(width: 28, height: 28)
                     .contentShape(Circle())
             }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
             .buttonStyle(.plain)
+            .popover(isPresented: $isPickerPresented) {
+                EmojiPickerView(model: model) { selection in
+                    switch selection {
+                    case let .native(value): react(value)
+                    case let .custom(emoji): react(emoji.messageToken)
+                    }
+                    isPickerPresented = false
+                }
+            }
         }
         .frame(width: 28, height: 28)
         .contentShape(Circle())
@@ -359,6 +368,7 @@ private struct ReactionActionMenu: View {
 }
 
 private struct MessageReplyContext: View {
+    let model: AppModel
     let preview: MessageReplyPreview
 
     var body: some View {
@@ -366,15 +376,12 @@ private struct MessageReplyContext: View {
             Image(systemName: "arrowshape.turn.up.left.fill")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
-            AvatarView(name: preview.author.displayName, url: preview.author.avatarURL, size: 16)
-            Text(preview.author.displayName)
-                .fontWeight(.semibold)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-            Text(summary)
+            MessageProfileAvatar(model: model, user: preview.author, size: 16)
+            MessageProfileName(model: model, user: preview.author, font: .caption.weight(.semibold))
+            CustomEmojiRichText(content: summary, emojiSize: 15)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+                .frame(maxWidth: .infinity, maxHeight: 18, alignment: .leading)
+                .clipped()
         }
         .font(.caption)
         .padding(.leading, 50)
@@ -391,16 +398,16 @@ private struct MessageReplyContext: View {
 }
 
 private struct MessageAvatarColumn: View {
+    let model: AppModel
     let startsGroup: Bool
-    let authorName: String
-    let avatarURL: URL?
+    let author: User
     let timestamp: Date
     @State private var isHovering = false
 
     var body: some View {
         ZStack {
             if startsGroup {
-                AvatarView(name: authorName, url: avatarURL, size: 38)
+                MessageProfileAvatar(model: model, user: author, size: 38)
             } else if isHovering {
                 Text(timestamp, format: .dateTime.hour().minute())
                     .font(.caption2)
@@ -431,7 +438,7 @@ private struct MessageContent: View {
                     cancel: cancel
                 )
             } else if !message.content.isEmpty {
-                MessageBodyView(content: message.content)
+                DiscordMessageContentView(content: message.content)
             }
             ForEach(message.attachments) { attachment in AttachmentView(attachment: attachment) }
             MessageReactions(reactions: message.reactions, react: react)
@@ -471,11 +478,13 @@ private struct InlineMessageEditor: View {
 }
 
 private struct MessageAuthorLine: View {
+    let model: AppModel
     let message: Message
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 7) {
-            Text(message.author.displayName).font(.headline).foregroundStyle(message.author.isBot ? Color.accentColor : .primary)
+            MessageProfileName(model: model, user: message.author, font: .headline)
+                .foregroundStyle(message.author.isBot ? Color.accentColor : .primary)
             if message.author.isBot {
                 Text("APP").font(.caption2.bold()).padding(.horizontal, 4).background(Color.accentColor, in: RoundedRectangle(cornerRadius: 3))
             }
@@ -493,12 +502,81 @@ private struct MessageReactions: View {
         HStack(spacing: 5) {
             ForEach(reactions) { reaction in
                 Button { react(reaction.emoji) } label: {
-                    Text("\(reaction.emoji)  \(reaction.count)")
+                    HStack(spacing: 4) {
+                        if ParsedCustomEmoji(token: reaction.emoji) != nil {
+                            CustomEmojiGlyph(token: reaction.emoji, size: 17)
+                        } else {
+                            Text(reaction.emoji)
+                        }
+                        Text(reaction.count, format: .number)
+                    }
                         .font(.caption).padding(.horizontal, 7).padding(.vertical, 3)
                         .background(reaction.didCurrentUserReact ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12), in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
+        }
+    }
+}
+
+private struct MessageProfileAvatar: View {
+    let model: AppModel
+    let user: User
+    let size: CGFloat
+    @State private var isPresented = false
+
+    var body: some View {
+        Button { open() } label: {
+            AvatarView(name: user.displayName, url: user.avatarURL, size: size)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isPresented) {
+            MessageProfilePopoverContent(model: model, userID: user.id)
+        }
+        .help("View \(user.displayName)'s profile")
+    }
+
+    private func open() {
+        model.showProfile(for: user)
+        isPresented = true
+    }
+}
+
+private struct MessageProfileName: View {
+    let model: AppModel
+    let user: User
+    let font: Font
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            model.showProfile(for: user)
+            isPresented = true
+        } label: {
+            Text(user.displayName).font(font)
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isPresented) {
+            MessageProfilePopoverContent(model: model, userID: user.id)
+        }
+        .help("View \(user.displayName)'s profile")
+    }
+}
+
+private struct MessageProfilePopoverContent: View {
+    let model: AppModel
+    let userID: UserID
+
+    var body: some View {
+        if let member = model.selectedMember, member.id == userID {
+            MemberProfilePopover(
+                member: member,
+                profile: model.selectedProfile,
+                isLoading: model.isLoadingProfile,
+                errorMessage: model.profileErrorMessage
+            )
+        } else {
+            ProgressView().padding(40)
         }
     }
 }

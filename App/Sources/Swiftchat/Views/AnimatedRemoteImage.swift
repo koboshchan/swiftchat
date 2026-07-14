@@ -26,14 +26,27 @@ struct AnimatedRemoteImage: View {
         }
         .task(id: url) {
             imageData = nil
-            do {
-                let (data, response) = try await URLSession.shared.data(from: url)
-                if let response = response as? HTTPURLResponse {
-                    guard 200..<300 ~= response.statusCode else { return }
+            for attempt in 0..<3 {
+                do {
+                    let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 30)
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    if let response = response as? HTTPURLResponse {
+                        guard 200..<300 ~= response.statusCode else {
+                            throw URLError(.badServerResponse)
+                        }
+                    }
+                    guard !Task.isCancelled else { return }
+                    imageData = data
+                    return
+                } catch is CancellationError {
+                    return
+                } catch {
+                    guard attempt < 2 else {
+                        imageData = nil
+                        return
+                    }
+                    try? await Task.sleep(for: .milliseconds(200 * (attempt + 1)))
                 }
-                imageData = data
-            } catch {
-                imageData = nil
             }
         }
     }
