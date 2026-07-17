@@ -15,10 +15,10 @@ public struct DiscordProductionBaseline: Codable, Equatable, Sendable {
     public var defaultCapabilities: Int
 
     public static let july2026 = DiscordProductionBaseline(
-        observedAt: Date(timeIntervalSince1970: 1_783_718_338),
-        webBuildNumber: 576_754,
+        observedAt: Date(timeIntervalSince1970: 1_784_240_478),
+        webBuildNumber: 579_073,
         apiVersion: 9,
-        desktopVersion: "0.0.398",
+        desktopVersion: "0.0.401",
         electronVersion: "37.6.0",
         webGatewayEncoding: "json",
         webGatewayCompression: "zlib-stream",
@@ -27,4 +27,3 @@ public struct DiscordProductionBaseline: Codable, Equatable, Sendable {
         defaultCapabilities: 1_734_653
     )
 }
-

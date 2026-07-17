@@ -8,6 +8,8 @@ public actor DiscordRESTProvider: ChatProvider {
     private let credentials: any CredentialStore
     private let handle: CredentialHandle
     private let session: URLSession
+    private let gatewayTransport: any GatewayTransport
+    private let clientMetadata: DiscordClientMetadata
     private var continuation: AsyncStream<ClientEvent>.Continuation?
     private var currentUser: User?
     private var authorizationValue: String?
@@ -18,13 +20,11 @@ public actor DiscordRESTProvider: ChatProvider {
     private var routeRateLimitDates: [String: Date] = [:]
     private var nextRequestSlotDate: Date = .distantPast
     private var requestSafetyCircuitIsOpen = false
-    private var webSocket: URLSessionWebSocketTask?
-    private var gatewayTask: Task<Void, Never>?
-    private var heartbeatTask: Task<Void, Never>?
-    private var gatewaySequence: Int?
+    private var unexpectedNotFoundCounts: [String: Int] = [:]
+    private var gatewaySession: GatewaySession?
+    private var gatewayEventTask: Task<Void, Never>?
     private var gatewayGuildIDs: [GuildID] = []
     private var gatewayReady = false
-    private var gatewayReconnectAttempts = 0
     private var pendingMemberGuildID: GuildID?
     private var cachedMembers: [GuildID: [Member]] = [:]
     private var cachedMemberListItems: [GuildID: [GuildMemberListUpdateDTO.Item?]] = [:]
@@ -38,10 +38,32 @@ public actor DiscordRESTProvider: ChatProvider {
     private var activeVoiceConnection: VoiceConnectionInfo?
     private var voiceNegotiationTimeoutTask: Task<Void, Never>?
 
-    public init(credentials: any CredentialStore, handle: CredentialHandle, session: URLSession = .shared) {
+    public init(
+        credentials: any CredentialStore,
+        handle: CredentialHandle,
+        session: URLSession? = nil,
+        fingerprint: String? = nil
+    ) {
+        let resolvedSession = session ?? URLSession(configuration: .default)
+        self.credentials = credentials
+        self.handle = handle
+        self.session = resolvedSession
+        gatewayTransport = URLSessionGatewayTransport(session: resolvedSession)
+        clientMetadata = DiscordClientMetadata(fingerprint: fingerprint)
+    }
+
+    init(
+        credentials: any CredentialStore,
+        handle: CredentialHandle,
+        session: URLSession,
+        gatewayTransport: any GatewayTransport,
+        fingerprint: String? = nil
+    ) {
         self.credentials = credentials
         self.handle = handle
         self.session = session
+        self.gatewayTransport = gatewayTransport
+        clientMetadata = DiscordClientMetadata(fingerprint: fingerprint)
     }
 
     public func bootstrap() async throws -> BootstrapSnapshot {
@@ -63,7 +85,6 @@ public actor DiscordRESTProvider: ChatProvider {
         presenceStatus = UserDefaults.standard.string(forKey: statusDefaultsKey).flatMap(PresenceStatus.init(rawValue:)) ?? .invisible
         let members = [Member(user: user, roleName: "You", status: presenceStatus)]
         try await startGateway()
-        continuation?.yield(.connectionChanged(.ready))
         return BootstrapSnapshot(currentUser: user, guilds: guilds, channels: channels, members: members)
     }
 
@@ -273,12 +294,27 @@ public actor DiscordRESTProvider: ChatProvider {
         return MessagePage(messages: values, hasMoreBefore: values.count == min(max(limit, 1), 100))
     }
 
+    public func sendTyping(in channelID: ChannelID) async throws {
+        let channel = cachedChannels.values.lazy.flatMap { $0 }.first { $0.id == channelID }
+        guard let channel else { throw ChatProviderError.channelNotFound }
+        guard channel.kind != .voice, channel.kind != .forum, channel.kind != .unknown else {
+            throw ChatProviderError.invalidRequest("Typing is unavailable in this channel.")
+        }
+        // Discord documents this mutation as an empty POST returning 204. It goes
+        // through the shared scheduler and, like every mutation, is attempted once.
+        try await requestEmpty("/channels/\(channelID)/typing", method: "POST")
+    }
+
     public func send(_ draft: SendMessageDraft) async throws -> Message {
         var body: [String: JSONValue] = [
             "content": .string(draft.content),
             "nonce": .string(draft.nonce),
             "tts": .bool(false),
             "flags": .number(0),
+            // The current web client always includes its best-known network
+            // type. SwiftChat has no account-safe reason to probe interfaces
+            // for this request, so it uses the official unknown fallback.
+            "mobile_network_type": .string("unknown"),
         ]
         if let replyTo = draft.replyTo {
             body["message_reference"] = .object(["message_id": .string(replyTo.description)])
@@ -286,7 +322,12 @@ public actor DiscordRESTProvider: ChatProvider {
         if !draft.attachmentURLs.isEmpty {
             body["attachments"] = .array(try await uploadAttachments(draft.attachmentURLs, channelID: draft.channelID))
         }
-        let dto: MessageDTO = try await request("/channels/\(draft.channelID)/messages", method: "POST", body: body)
+        let dto: MessageDTO = try await request(
+            "/channels/\(draft.channelID)/messages",
+            method: "POST",
+            body: body,
+            headers: ["X-Context-Properties": DiscordClientMetadata.messageContextHeader]
+        )
         var message = try dto.domain()
         message.nonce = draft.nonce
         cachedMessages[message.id] = message
@@ -475,16 +516,21 @@ public actor DiscordRESTProvider: ChatProvider {
     }
 
     public func disconnect() async {
+        requestSafetyCircuitIsOpen = true
         voiceNegotiationTimeoutTask?.cancel()
         if let pendingVoiceNegotiation {
             pendingVoiceNegotiation.continuation.resume(throwing: CancellationError())
             self.pendingVoiceNegotiation = nil
         }
         activeVoiceConnection = nil
-        gatewayTask?.cancel()
-        heartbeatTask?.cancel()
-        webSocket?.cancel(with: .goingAway, reason: nil)
-        webSocket = nil
+        gatewayEventTask?.cancel()
+        gatewayEventTask = nil
+        await gatewaySession?.stop()
+        gatewaySession = nil
+        gatewayReady = false
+        session.getAllTasks { tasks in
+            for task in tasks { task.cancel() }
+        }
         continuation?.yield(.connectionChanged(.disconnected))
         continuation?.finish()
         continuation = nil
@@ -492,98 +538,59 @@ public actor DiscordRESTProvider: ChatProvider {
     }
 
     private func startGateway() async throws {
-        guard webSocket == nil else { return }
-        let socket = session.webSocketTask(with: URL(string: "wss://gateway.discord.gg/?encoding=json&v=9")!)
-        webSocket = socket
-        socket.resume()
-        gatewayTask = Task { [weak self] in await self?.receiveGatewayEvents() }
-    }
-
-    private func receiveGatewayEvents() async {
-        guard let webSocket else { return }
-        while !Task.isCancelled {
-            do {
-                let message = try await webSocket.receive()
-                let data: Data = switch message {
-                case let .data(value): value
-                case let .string(value): Data(value.utf8)
-                @unknown default: Data()
-                }
-                guard
-                    let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                    let op = payload["op"] as? Int
-                else { continue }
-                if let sequence = payload["s"] as? Int { gatewaySequence = sequence }
-                if op == 10, let hello = payload["d"] as? [String: Any], let interval = hello["heartbeat_interval"] as? NSNumber {
-                    startHeartbeat(interval: interval.doubleValue / 1_000)
-                    try await identifyGateway()
-                } else if op == 0, let eventName = payload["t"] as? String, let body = payload["d"] {
-                    await handleGatewayDispatch(name: eventName, body: body)
-                } else if op == 7 {
-                    webSocket.cancel(with: .goingAway, reason: nil)
-                    self.webSocket = nil
-                    gatewayReconnectAttempts += 1
-                    guard gatewayReconnectAttempts <= 3 else {
-                        requestSafetyCircuitIsOpen = true
-                        continuation?.yield(.connectionChanged(.disconnected))
-                        gatewayLogger.fault("Gateway reconnect circuit opened after three server reconnect requests")
-                        return
-                    }
-                    let delay = [5.0, 15.0, 45.0][gatewayReconnectAttempts - 1]
-                    continuation?.yield(.connectionChanged(.backingOff))
-                    try? await Task.sleep(for: .seconds(delay))
-                    guard !Task.isCancelled else { return }
-                    try? await startGateway()
-                    return
-                }
-            } catch {
-                continuation?.yield(.connectionChanged(.backingOff))
-                break
+        guard gatewaySession == nil else { return }
+        let token = try await authorizationToken()
+        let identifyData = try JSONEncoder().encode(GatewayEnvelope(
+            op: 2,
+            data: .object([
+                "token": .string(token),
+                "capabilities": .number(Double(DiscordProductionBaseline.july2026.defaultCapabilities)),
+                "properties": .object(clientMetadata.properties),
+                "presence": .object([
+                    "status": .string(presenceStatus.rawValue),
+                    "since": .number(0),
+                    "activities": .array([]),
+                    "afk": .bool(false),
+                ]),
+                "compress": .bool(false),
+                "client_state": .object(["guild_versions": .object([:])]),
+            ])
+        ))
+        let gateway = GatewaySession(
+            configuration: GatewaySession.Configuration(
+                gatewayURL: URL(string: "wss://gateway.discord.gg")!,
+                identifyPayload: identifyData,
+                token: token
+            ),
+            transport: gatewayTransport
+        )
+        gatewaySession = gateway
+        gatewayEventTask = Task { [weak self, events = gateway.events] in
+            for await event in events {
+                guard !Task.isCancelled else { return }
+                await self?.handleGatewaySessionEvent(event)
             }
         }
+        await gateway.connect()
     }
 
-    private func identifyGateway() async throws {
-        let credential = try await credentials.credential(for: handle)
-        guard let token = String(data: credential, encoding: .utf8) else { throw ChatProviderError.unauthenticated }
-        let properties: [String: Any] = [
-            "os": "Mac OS X",
-            "browser": "Discord Client",
-            "device": "Discord Client",
-            "system_locale": Locale.preferredLanguages.first ?? "en-US",
-            "browser_user_agent": "Swiftchat/0.1 (macOS; native Swift client)",
-            "browser_version": DiscordProductionBaseline.july2026.desktopVersion,
-            "os_version": ProcessInfo.processInfo.operatingSystemVersionString,
-            "referrer": "",
-            "referring_domain": "",
-            "release_channel": "stable",
-            "client_build_number": DiscordProductionBaseline.july2026.webBuildNumber,
-            "client_event_source": NSNull(),
-            "has_client_mods": false,
-        ]
-        try await sendGateway([
-            "op": 2,
-            "d": [
-                "token": token,
-                "capabilities": DiscordProductionBaseline.july2026.defaultCapabilities,
-                "properties": properties,
-                "presence": ["status": presenceStatus.rawValue, "since": 0, "activities": [], "afk": false],
-                "compress": false,
-                "client_state": ["guild_versions": [:]],
-            ] as [String: Any],
-        ])
-    }
-
-    private func startHeartbeat(interval: TimeInterval) {
-        heartbeatTask?.cancel()
-        heartbeatTask = Task { [weak self] in
-            let initialDelay = Double.random(in: 0...max(0.1, interval))
-            try? await Task.sleep(for: .seconds(initialDelay))
-            while !Task.isCancelled {
-                guard let self else { return }
-                try? await self.sendGateway(["op": 1, "d": await self.gatewaySequence ?? NSNull()])
-                try? await Task.sleep(for: .seconds(interval))
+    private func handleGatewaySessionEvent(_ event: GatewaySessionEvent) async {
+        switch event {
+        case let .stateChanged(connectionState):
+            gatewayReady = connectionState == .ready
+            if connectionState == .authenticationFailed {
+                await openSafetyCircuit(status: 401, discordCode: nil, route: "GATEWAY IDENTIFY/RESUME")
+                return
             }
+            continuation?.yield(.connectionChanged(connectionState))
+            if connectionState == .ready {
+                gatewayLogger.info("Gateway session ready")
+                if let pendingMemberGuildID { await attemptMemberSubscription(guildID: pendingMemberGuildID) }
+            }
+        case let .dispatch(name, value):
+            guard let data = try? JSONEncoder().encode(value),
+                  let body = try? JSONSerialization.jsonObject(with: data) else { return }
+            await handleGatewayDispatch(name: name, body: body)
         }
     }
 
@@ -602,16 +609,15 @@ public actor DiscordRESTProvider: ChatProvider {
     }
 
     private func sendGateway(_ payload: [String: Any]) async throws {
-        guard let webSocket else { throw ChatProviderError.invalidRequest("Discord Gateway is not connected yet.") }
+        guard let gatewaySession else { throw ChatProviderError.invalidRequest("Discord Gateway is not connected yet.") }
         let data = try JSONSerialization.data(withJSONObject: payload)
-        try await webSocket.send(.data(data))
+        try await gatewaySession.send(data)
     }
 
     private func handleGatewayDispatch(name: String, body: Any) async {
         guard JSONSerialization.isValidJSONObject(body), let data = try? JSONSerialization.data(withJSONObject: body) else { return }
         switch name {
         case "READY", "RESUMED":
-            gatewayReconnectAttempts = 0
             if name == "READY",
                let ready = try? JSONDecoder().decode(GatewayReadyGuildsDTO.self, from: data) {
                 gatewayGuildIDs = ready.guilds.compactMap { GuildID($0.id) }
@@ -628,10 +634,6 @@ public actor DiscordRESTProvider: ChatProvider {
                     gatewayLogger.info("Ready voice-state snapshot received; count=\(voiceStateCount)")
                 }
             }
-            gatewayReady = true
-            gatewayLogger.info("Gateway session ready")
-            continuation?.yield(.connectionChanged(.ready))
-            if let pendingMemberGuildID { await attemptMemberSubscription(guildID: pendingMemberGuildID) }
         case "READY_SUPPLEMENTAL":
             let states = ReadySupplementalVoiceStateResolver.resolve(
                 data: data,
@@ -651,6 +653,24 @@ public actor DiscordRESTProvider: ChatProvider {
                 cachedMessages[message.id] = message
                 continuation?.yield(.messageCreated(message))
             }
+        case "TYPING_START":
+            guard let typing = try? JSONDecoder().decode(TypingStartDTO.self, from: data),
+                  let channelID = ChannelID(typing.channelID),
+                  let userID = UserID(typing.userID),
+                  let user = DiscordTypingEventResolver.resolve(
+                      typing,
+                      userID: userID,
+                      currentUser: currentUser,
+                      currentStatus: presenceStatus,
+                      cachedMembers: cachedMembers,
+                      cachedChannels: cachedChannels.values.flatMap { $0 },
+                      cachedMessages: Array(cachedMessages.values),
+                      cachedGuildRoles: cachedGuildRoles
+                  ) else {
+                gatewayLogger.debug("Ignored an unresolved or malformed typing event")
+                return
+            }
+            continuation?.yield(.typing(channelID: channelID, user: user))
         case "MESSAGE_UPDATE":
             if let update = try? JSONDecoder().decode(MessageUpdateDTO.self, from: data),
                let messageID = MessageID(update.id), ChannelID(update.channelID) != nil,
@@ -751,6 +771,48 @@ public actor DiscordRESTProvider: ChatProvider {
         }
     }
 
+}
+
+enum DiscordTypingEventResolver {
+    static func resolve(
+        _ typing: TypingStartDTO,
+        userID: UserID,
+        currentUser: User?,
+        currentStatus: PresenceStatus,
+        cachedMembers: [GuildID: [Member]],
+        cachedChannels: [Channel],
+        cachedMessages: [Message],
+        cachedGuildRoles: [GuildID: [GuildRoleDTO]]
+    ) -> User? {
+        let guildID = typing.guildID.flatMap(GuildID.init)
+        if let member = typing.member,
+           let resolved = try? member.domain(
+               currentUserID: currentUser?.id,
+               currentStatus: currentStatus,
+               guildRoles: guildID.flatMap { cachedGuildRoles[$0] } ?? [],
+               guildID: guildID
+           ).user {
+            return resolved
+        }
+        if let user = typing.user, let resolved = try? user.domain() { return resolved }
+        if let guildID,
+           let member = cachedMembers[guildID]?.first(where: { $0.id == userID }) {
+            return member.user
+        }
+        if let recipient = cachedChannels.lazy
+            .flatMap(\.recipients)
+            .first(where: { $0.id == userID }) {
+            return recipient
+        }
+        if let author = cachedMessages.first(where: { $0.author.id == userID })?.author {
+            return author
+        }
+        return currentUser?.id == userID ? currentUser : nil
+    }
+}
+
+extension DiscordRESTProvider {
+
     private func finishVoiceNegotiationIfReady() {
         guard let pending = pendingVoiceNegotiation,
               let sessionID = pending.sessionID,
@@ -818,9 +880,10 @@ public actor DiscordRESTProvider: ChatProvider {
         _ path: String,
         method: String = "GET",
         query: [URLQueryItem] = [],
-        body: [String: JSONValue]? = nil
+        body: [String: JSONValue]? = nil,
+        headers: [String: String] = [:]
     ) async throws -> Response {
-        let (data, response) = try await perform(path, method: method, query: query, body: body)
+        let (data, response) = try await perform(path, method: method, query: query, body: body, headers: headers)
         guard (200..<300).contains(response.statusCode) else {
             if response.statusCode == 401 {
                 authorizationValue = nil
@@ -831,15 +894,16 @@ public actor DiscordRESTProvider: ChatProvider {
         do {
             return try JSONDecoder().decode(Response.self, from: data)
         } catch {
+            let route = Self.routeTemplate(method: method, path: path)
             gatewayLogger.error(
-                "Discord response decoding failed for \(path, privacy: .public): \(String(reflecting: error), privacy: .public)"
+                "Discord response decoding failed for \(route, privacy: .public): \(String(reflecting: error), privacy: .public)"
             )
             throw error
         }
     }
 
     private func requestEmpty(_ path: String, method: String) async throws {
-        let (_, response) = try await perform(path, method: method, query: [], body: nil)
+        let (_, response) = try await perform(path, method: method, query: [], body: nil, headers: [:])
         guard (200..<300).contains(response.statusCode) else {
             if response.statusCode == 401 {
                 authorizationValue = nil
@@ -853,7 +917,8 @@ public actor DiscordRESTProvider: ChatProvider {
         _ path: String,
         method: String,
         query: [URLQueryItem],
-        body: [String: JSONValue]?
+        body: [String: JSONValue]?,
+        headers: [String: String] = [:]
     ) async throws -> (Data, HTTPURLResponse) {
         guard !requestSafetyCircuitIsOpen else {
             throw ChatProviderError.invalidRequest(
@@ -872,12 +937,14 @@ public actor DiscordRESTProvider: ChatProvider {
             request.httpMethod = method
             request.timeoutInterval = 30
             let token = try await authorizationToken()
+            // Credential storage is an actor boundary. A different request may
+            // have opened the safety circuit while this one was suspended.
+            guard !requestSafetyCircuitIsOpen else {
+                throw ChatProviderError.invalidRequest("Discord networking is stopped for this session.")
+            }
             request.setValue(token, forHTTPHeaderField: "Authorization")
-            request.setValue("Swiftchat/0.1 (macOS; native Swift client)", forHTTPHeaderField: "User-Agent")
-            let locale = Locale.preferredLanguages.first ?? "en-US"
-            request.setValue(locale, forHTTPHeaderField: "X-Discord-Locale")
-            request.setValue(TimeZone.current.identifier, forHTTPHeaderField: "X-Discord-Timezone")
-            request.setValue(Locale.preferredLanguages.joined(separator: ","), forHTTPHeaderField: "Accept-Language")
+            try clientMetadata.apply(to: &request)
+            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
             if let body {
                 request.httpBody = try JSONEncoder().encode(JSONValue.object(body))
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -900,11 +967,38 @@ public actor DiscordRESTProvider: ChatProvider {
                 if attempt + 1 >= maximumAttempts { return (data, response) }
                 continue
             }
-            if response.statusCode == 401 || response.statusCode == 403 {
-                requestSafetyCircuitIsOpen = true
-                if response.statusCode == 401 { authorizationValue = nil }
-                gatewayLogger.fault("Discord REST safety circuit opened after HTTP \(response.statusCode)")
-                return (data, response)
+
+            let discordCode = Self.discordErrorCode(from: data)
+            let route = Self.routeTemplate(method: method, path: path)
+            let bucket = response.value(forHTTPHeaderField: "X-RateLimit-Bucket") ?? "none"
+            gatewayLogger.debug(
+                "Discord REST \(route, privacy: .public) status=\(response.statusCode) bucket=\(bucket, privacy: .public)"
+            )
+            if Self.isSafetyStop(
+                status: response.statusCode,
+                discordCode: discordCode,
+                method: method,
+                data: data
+            ) {
+                await openSafetyCircuit(status: response.statusCode, discordCode: discordCode, route: route)
+                if response.statusCode == 401 || discordCode == 40_001 {
+                    throw ChatProviderError.unauthenticated
+                }
+                throw ChatProviderError.invalidRequest(Self.safetyStopMessage(
+                    status: response.statusCode,
+                    discordCode: discordCode
+                ))
+            }
+            if response.statusCode == 404 {
+                unexpectedNotFoundCounts[route, default: 0] += 1
+                if unexpectedNotFoundCounts[route, default: 0] >= 2 {
+                    await openSafetyCircuit(status: 404, discordCode: discordCode, route: route)
+                    throw ChatProviderError.invalidRequest(
+                        "Discord networking was stopped after this route repeatedly returned an unexpected not-found response."
+                    )
+                }
+            } else if (200..<300).contains(response.statusCode) {
+                unexpectedNotFoundCounts[route] = nil
             }
             if response.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0",
                let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset-After").flatMap(Double.init) {
@@ -929,6 +1023,68 @@ public actor DiscordRESTProvider: ChatProvider {
         nextRequestSlotDate = scheduledDate.addingTimeInterval(0.5)
         let delay = scheduledDate.timeIntervalSince(now)
         if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+        guard !requestSafetyCircuitIsOpen else {
+            throw ChatProviderError.invalidRequest("Discord networking is stopped for this session.")
+        }
+    }
+
+    private func openSafetyCircuit(status: Int, discordCode: Int?, route: String) async {
+        guard !requestSafetyCircuitIsOpen else { return }
+        requestSafetyCircuitIsOpen = true
+        if status == 401 || discordCode == 40_001 { authorizationValue = nil }
+        gatewayReady = false
+        gatewayEventTask?.cancel()
+        gatewayEventTask = nil
+        await gatewaySession?.stop()
+        gatewaySession = nil
+        // The provider owns a dedicated URLSession in production. Cancel every
+        // outstanding REST/upload/socket task so a request already suspended at
+        // the actor boundary cannot continue after a stop signal.
+        session.getAllTasks { tasks in
+            for task in tasks { task.cancel() }
+        }
+        continuation?.yield(.connectionChanged(status == 401 ? .authenticationFailed : .disconnected))
+        gatewayLogger.fault(
+            "Discord network safety circuit opened route=\(route, privacy: .public) HTTP=\(status) code=\(discordCode ?? -1)"
+        )
+    }
+
+    private static func discordErrorCode(from data: Data) -> Int? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return (object["code"] as? NSNumber)?.intValue
+    }
+
+    private static func isSafetyStop(status: Int, discordCode: Int?, method: String, data: Data) -> Bool {
+        if status == 401 || status == 403 { return true }
+        if let discordCode, [40_001, 40_002, 40_003, 40_004, 40_012, 40_333].contains(discordCode) {
+            return true
+        }
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           object["captcha_key"] != nil || object["captcha_sitekey"] != nil || object["captcha_service"] != nil {
+            return true
+        }
+        // A client-generated mutation reaching HTTP 400 means SwiftChat's
+        // contract is malformed. Do not let another user action repeat it.
+        return status == 400 && method != "GET"
+    }
+
+    private static func safetyStopMessage(status: Int, discordCode: Int?) -> String {
+        switch discordCode {
+        case 40_002: "Discord requires account verification. SwiftChat networking has been stopped."
+        case 40_003: "Discord reported that direct messages are being opened too quickly. SwiftChat networking has been stopped."
+        case 40_004: "Discord temporarily disabled message sending. SwiftChat networking has been stopped without retrying."
+        case 40_012: "Discord revoked the connection. SwiftChat networking has been stopped."
+        case 40_333: "Discord rejected the request metadata. SwiftChat networking has been stopped."
+        default: "Discord returned a safety-sensitive HTTP \(status) response. SwiftChat networking has been stopped."
+        }
+    }
+
+    private static func routeTemplate(method: String, path: String) -> String {
+        let segments = path.split(separator: "/", omittingEmptySubsequences: false).map { segment -> String in
+            if segment.count >= 15, segment.allSatisfy(\.isNumber) { return "{id}" }
+            return String(segment)
+        }
+        return "\(method) \(segments.joined(separator: "/"))"
     }
 
     private func authorizationToken() async throws -> String {
@@ -1172,7 +1328,7 @@ struct LossyList<Element: Decodable>: Decodable {
     }
 }
 
-private struct UserDTO: Decodable {
+struct UserDTO: Decodable {
     struct AvatarDecorationDTO: Decodable { var asset: String? }
     struct CollectiblesDTO: Decodable {
         struct NameplateDTO: Decodable {
@@ -1606,7 +1762,7 @@ private struct ChannelDTO: Decodable {
     }
 }
 
-private struct GuildMemberDTO: Decodable {
+struct GuildMemberDTO: Decodable {
     struct PresenceDTO: Decodable {
         struct ActivityDTO: Decodable {
             struct EmojiDTO: Decodable {
@@ -1686,7 +1842,7 @@ private struct GuildMemberDTO: Decodable {
     }
 }
 
-private struct GuildRoleDTO: Decodable {
+struct GuildRoleDTO: Decodable {
     var id: String
     var name: String
     var position: Int
@@ -1716,6 +1872,21 @@ private struct MessageDeleteDTO: Decodable {
     var id: String
     var channelID: String
     enum CodingKeys: String, CodingKey { case id, channelID = "channel_id" }
+}
+
+struct TypingStartDTO: Decodable {
+    var channelID: String
+    var guildID: String?
+    var userID: String
+    var member: GuildMemberDTO?
+    var user: UserDTO?
+
+    enum CodingKeys: String, CodingKey {
+        case channelID = "channel_id"
+        case guildID = "guild_id"
+        case userID = "user_id"
+        case member, user
+    }
 }
 
 private struct MessageUpdateDTO: Decodable {

@@ -3,12 +3,14 @@ import SwiftUI
 
 struct ChannelSidebarView: View {
     let voiceModel: AppModel
+    let guild: Guild?
     let channels: [Channel]
     @Binding var selection: ChannelID?
     let currentUser: User?
     let connectionState: ConnectionState
     let currentStatus: PresenceStatus
     let isAuthenticated: Bool
+    let isOfflineTesting: Bool
     let activeVoiceChannelID: ChannelID?
     let connectAccount: () -> Void
     let logout: () async -> Void
@@ -16,9 +18,6 @@ struct ChannelSidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ServerChannelHeader(guild: selectedGuild)
-            Divider()
-
             List(selection: $selection) {
                 ForEach(ChannelGroup.make(from: channels)) { group in
                     ChannelGroupRows(
@@ -36,17 +35,13 @@ struct ChannelSidebarView: View {
                 connectionState: connectionState,
                 currentStatus: currentStatus,
                 isAuthenticated: isAuthenticated,
+                isOfflineTesting: isOfflineTesting,
                 connectAccount: connectAccount,
                 logout: logout,
                 updateStatus: updateStatus
             )
         }
         .navigationTitle("")
-    }
-
-    private var selectedGuild: Guild? {
-        guard let guildID = voiceModel.selectedGuildID else { return nil }
-        return voiceModel.snapshot?.guilds.first(where: { $0.id == guildID })
     }
 
     private var voiceSidebarParticipantsByChannel: [ChannelID: [VoiceSidebarParticipant]] {
@@ -93,51 +88,28 @@ struct ChannelSidebarView: View {
     }
 }
 
-private struct ServerChannelHeader: View {
+struct SidebarServerIdentity: View {
     let guild: Guild?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 7) {
             if let guild {
-                GuildHeaderIcon(guild: guild)
-                Text(guild.name)
-                    .font(.headline)
+                let displayName = guild.name.isEmpty ? "Unnamed Server" : guild.name
+                GuildIconView(name: displayName, iconURL: guild.iconURL, size: 22, cornerRadius: 7)
+                Text(displayName)
                     .lineLimit(1)
+                    .truncationMode(.tail)
             } else {
                 Image(systemName: "message.fill")
-                    .font(.callout.weight(.semibold))
-                    .frame(width: 30, height: 30)
-                    .background(Color.accentColor.opacity(0.18), in: RoundedRectangle(cornerRadius: 9))
-                Text("Messages").font(.headline)
+                    .frame(width: 22, height: 22)
+                Text("Messages")
+                    .lineLimit(1)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .frame(height: 50)
+        .font(.callout.weight(.semibold))
+        .frame(maxWidth: 150, alignment: .leading)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-    }
-}
-
-private struct GuildHeaderIcon: View {
-    let guild: Guild
-
-    var body: some View {
-        Group {
-            if let iconURL = guild.iconURL {
-                AnimatedRemoteImage(url: iconURL)
-            } else {
-                initials
-            }
-        }
-        .frame(width: 30, height: 30)
-        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-    }
-
-    private var initials: some View {
-        Text(guild.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined())
-            .font(.caption.weight(.bold))
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color(hex: guild.accentHex))
     }
 }
 
@@ -294,6 +266,7 @@ private struct AccountControlView: View {
     let connectionState: ConnectionState
     let currentStatus: PresenceStatus
     let isAuthenticated: Bool
+    let isOfflineTesting: Bool
     let connectAccount: () -> Void
     let logout: () async -> Void
     let updateStatus: (PresenceStatus) async -> Void
@@ -316,6 +289,7 @@ private struct AccountControlView: View {
                     Spacer(minLength: 4)
                     AccountMenu(
                         isAuthenticated: isAuthenticated,
+                        isOfflineTesting: isOfflineTesting,
                         currentStatus: currentStatus,
                         connectAccount: connectAccount,
                         requestLogout: { confirmLogout = true },
@@ -342,10 +316,12 @@ private struct AccountControlView: View {
     }
 
     private var displayName: String {
-        isAuthenticated ? (user?.displayName ?? "Discord Account") : "Connect Account"
+        if isOfflineTesting { return "Offline Testing" }
+        return isAuthenticated ? (user?.displayName ?? "Discord Account") : "Connect Account"
     }
 
     private var accountSubtitle: String {
+        if isOfflineTesting { return "Mock data • networking disabled" }
         if isAuthenticated { return user.map { "@\($0.username)" } ?? connectionState.rawValue }
         return "Sign in to Discord"
     }
@@ -369,6 +345,7 @@ private struct AccountAvatar: View {
 
 private struct AccountMenu: View {
     let isAuthenticated: Bool
+    let isOfflineTesting: Bool
     let currentStatus: PresenceStatus
     let connectAccount: () -> Void
     let requestLogout: () -> Void
@@ -376,7 +353,9 @@ private struct AccountMenu: View {
 
     var body: some View {
         Menu {
-            if isAuthenticated {
+            if isOfflineTesting {
+                Text("Discord networking is disabled")
+            } else if isAuthenticated {
                 Menu("Set Status", systemImage: "circle.dotted") {
                     ForEach(PresenceStatus.allCases.filter { $0 != .offline }, id: \.self) { status in
                         Button {
@@ -433,10 +412,6 @@ private struct ChannelRow: View {
     var isVoiceConnected = false
 
     var body: some View {
-        content
-    }
-
-    private var content: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
                 .foregroundStyle(isVoiceConnected ? Color.green : Color.secondary)

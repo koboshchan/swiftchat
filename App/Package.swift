@@ -15,6 +15,10 @@ let package = Package(
         .package(path: "../Packages/MessageRendering"),
         .package(path: "../Packages/MediaPipeline"),
         .package(path: "../Packages/SwiftchatPluginSDK"),
+        .package(
+            url: "https://github.com/llsc12/hcaptcha",
+            revision: "29de12bd290c5cc9c61b3e3c15fe9a9d21449465"
+        ),
     ],
     targets: [
         .executableTarget(
@@ -22,7 +26,9 @@ let package = Package(
             dependencies: [
                 "SwiftchatModels", "DiscordProtocol", "SwiftchatPersistence",
                 "MessageRendering", "MediaPipeline", "SwiftchatPluginSDK",
+                .product(name: "HCaptcha", package: "hcaptcha"),
             ],
+            resources: [.process("Resources")],
             swiftSettings: [
                 .enableUpcomingFeature("StrictConcurrency"),
                 .defaultIsolation(MainActor.self),

@@ -20,7 +20,7 @@ struct ServerRailView: View {
                     }
                 }
             }
-            .scrollClipDisabled()
+            .scrollIndicators(.hidden)
             Spacer(minLength: 4)
         }
         .padding(.top, 12)
@@ -38,6 +38,8 @@ private struct GuildRailButton: View {
     @State private var isHovering = false
 
     var body: some View {
+        let displayName = guild.name.isEmpty ? "Unnamed Server" : guild.name
+
         HStack(spacing: 5) {
             ServerRailSelectionIndicator(
                 isSelected: isSelected,
@@ -45,42 +47,16 @@ private struct GuildRailButton: View {
                 hasNotification: guild.unreadCount > 0
             )
             Button(action: action) {
-                if let iconURL = guild.iconURL {
-                    AnimatedRemoteImage(url: iconURL)
-                        .frame(width: 44, height: 44)
-                        .background(Color.secondary.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                } else { initials }
+                GuildIconView(name: displayName, iconURL: guild.iconURL, size: 44, cornerRadius: 14)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(displayName)
+            .help(displayName)
         }
         .frame(width: ChatChromeMetrics.serverRailWidth, height: 46, alignment: .leading)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .overlay(alignment: .leading) {
-            if isHovering {
-                Text(guild.name)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(1)
-                    .padding(.horizontal, 11)
-                    .frame(height: 32)
-                    .glassEffect(.regular, in: Capsule())
-                    .fixedSize()
-                    .offset(x: ChatChromeMetrics.serverRailWidth + 7)
-                    .allowsHitTesting(false)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .leading)))
-                    .zIndex(100)
-            }
-        }
         .animation(.snappy(duration: 0.18), value: isHovering)
-        .zIndex(isHovering ? 100 : 0)
-    }
-
-    private var initials: some View {
-        Text(guild.name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined())
-            .font(.headline)
-            .frame(width: 44, height: 44)
-            .background(Color(hex: guild.accentHex).opacity(0.82), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 

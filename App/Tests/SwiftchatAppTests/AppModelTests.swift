@@ -5,8 +5,135 @@ import Foundation
 @testable import Swiftchat
 
 @MainActor
+@Test func nativeEmojiCatalogLoadsEveryFullyQualifiedUnicode17Emoji() {
+    #expect(NativeEmojiCatalogDiagnostics.sourceEntryCount == 3_944)
+    #expect(NativeEmojiCatalogDiagnostics.itemCount < NativeEmojiCatalogDiagnostics.sourceEntryCount)
+    #expect(NativeEmojiCatalogDiagnostics.skinToneCapableItemCount > 100)
+    #expect(NativeEmojiCatalogDiagnostics.wavingHandValues == ["👋", "👋🏻", "👋🏼", "👋🏽", "👋🏾", "👋🏿"])
+    #expect(NativeEmojiCatalogDiagnostics.mediumToneVariationSelectorValues == ["✌🏽", "☝🏽", "✍🏽"])
+    #expect(NativeEmojiCatalogDiagnostics.baseItemsContainingSkinToneModifier == 0)
+    #expect(NativeEmojiCatalogDiagnostics.categoryItemCounts.count == 9)
+    #expect(NativeEmojiCatalogDiagnostics.categoryItemCounts.values.allSatisfy { $0 > 0 })
+    #expect(NativeEmojiCatalogDiagnostics.shortcode(for: "🤍") == ":white_heart:")
+    // Tone variants share their base emoji's aliases, so the collapsed picker catalog is smaller
+    // than Emojibase's 3,808 keyed source records.
+    #expect(NativeEmojiCatalogDiagnostics.emojiCountWithDiscordShortcodes == 1_884)
+    #expect(NativeEmojiCatalogDiagnostics.discordShortcodeAliasCount == 2_551)
+    #expect(NativeEmojiCatalogDiagnostics.shortcodes(for: "🎉") == ["tada", "party_popper"])
+    #expect(NativeEmojiCatalogDiagnostics.shortcode(for: "🎉") == ":tada:")
+    #expect(NativeEmojiCatalogDiagnostics.searchMatches(value: "🎉", query: ":party_popper:"))
+    #expect(NativeEmojiCatalogDiagnostics.searchMatches(value: "👍", query: "+1"))
+    #expect(EmojiSearchMatcher.normalized(":grinning_face:") == "grinning_face")
+}
+
+@MainActor
+@Test func emojiPickerUsesOneContinuousRecycledDocument() {
+    #expect(EmojiPickerPerformanceDiagnostics.itemsPerRecycledRow == 9)
+    #expect(EmojiPickerPerformanceDiagnostics.nativeSectionIDs.count == 9)
+    #expect(Set(EmojiPickerPerformanceDiagnostics.nativeSectionIDs).count == 9)
+    #expect(EmojiPickerPerformanceDiagnostics.nativeDocumentRowCount
+        < EmojiPickerPerformanceDiagnostics.nativeItemCount / 4)
+    #expect(NativeEmojiCatalogDiagnostics.categoryItemCounts["people", default: 0] > 300)
+    #expect(!EmojiPickerPerformanceDiagnostics.nativeSidebarIsVisible(
+        bounds: nil,
+        viewportHeight: 300
+    ))
+    #expect(!EmojiPickerPerformanceDiagnostics.nativeSidebarIsVisible(
+        bounds: CGRect(x: 0, y: 320, width: 46, height: 300),
+        viewportHeight: 300
+    ))
+    #expect(EmojiPickerPerformanceDiagnostics.nativeSidebarIsVisible(
+        bounds: CGRect(x: 0, y: 280, width: 46, height: 300),
+        viewportHeight: 300
+    ))
+}
+
+@Test func emojiPickerKeyboardNavigationWrapsRowsAndClampsColumns() {
+    let rows = [
+        ["a", "b", "c"],
+        ["d", "e", "f"],
+        ["g"],
+    ]
+
+    #expect(EmojiPickerGridNavigation.destinationID(
+        rows: rows, currentID: nil, direction: .right
+    ) == "a")
+    #expect(EmojiPickerGridNavigation.destinationID(
+        rows: rows, currentID: "a", direction: .left
+    ) == "a")
+    #expect(EmojiPickerGridNavigation.destinationID(
+        rows: rows, currentID: "c", direction: .right
+    ) == "d")
+    #expect(EmojiPickerGridNavigation.destinationID(
+        rows: rows, currentID: "d", direction: .left
+    ) == "c")
+    #expect(EmojiPickerGridNavigation.destinationID(
+        rows: rows, currentID: "c", direction: .down
+    ) == "f")
+    #expect(EmojiPickerGridNavigation.destinationID(
+        rows: rows, currentID: "f", direction: .down
+    ) == "g")
+    #expect(EmojiPickerGridNavigation.destinationID(
+        rows: rows, currentID: "g", direction: .up
+    ) == "d")
+}
+
+@Test func emojiPickerOnlyStaysOpenForExplicitPersistentShiftSelection() {
+    #expect(EmojiPickerActivationPolicy.keepsPickerPresented(
+        allowsPersistentSelection: true,
+        shiftPressed: true
+    ))
+    #expect(!EmojiPickerActivationPolicy.keepsPickerPresented(
+        allowsPersistentSelection: true,
+        shiftPressed: false
+    ))
+    #expect(!EmojiPickerActivationPolicy.keepsPickerPresented(
+        allowsPersistentSelection: false,
+        shiftPressed: true
+    ))
+}
+
+@Test func messageActionsRemainVisibleWhileTheirReactionPickerIsPresented() {
+    #expect(MessageActionVisibilityPolicy.isVisible(
+        isRowHovered: true,
+        isReactionPickerPresented: false,
+        isEditing: false
+    ))
+    #expect(MessageActionVisibilityPolicy.isVisible(
+        isRowHovered: false,
+        isReactionPickerPresented: true,
+        isEditing: false
+    ))
+    #expect(!MessageActionVisibilityPolicy.isVisible(
+        isRowHovered: false,
+        isReactionPickerPresented: false,
+        isEditing: false
+    ))
+    #expect(!MessageActionVisibilityPolicy.isVisible(
+        isRowHovered: true,
+        isReactionPickerPresented: true,
+        isEditing: true
+    ))
+}
+
+@Test func emojiPickerOnlyAsksTheScrollViewToRevealChangedRows() {
+    #expect(!EmojiPickerScrollPolicy.shouldReveal(
+        previousRowID: "row:4",
+        destinationRowID: "row:4"
+    ))
+    #expect(EmojiPickerScrollPolicy.shouldReveal(
+        previousRowID: "row:4",
+        destinationRowID: "row:5"
+    ))
+    #expect(EmojiPickerScrollPolicy.shouldReveal(
+        previousRowID: nil,
+        destinationRowID: "row:1"
+    ))
+}
+
+@MainActor
 @Test func appModelLoadsDemoAndSendsMessage() async {
-    let model = AppModel(restoreStoredSession: false)
+    let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     #expect(model.snapshot != nil)
     #expect(model.selectedChannel != nil)
@@ -17,9 +144,85 @@ import Foundation
     #expect(model.messages.last?.content == "hello from test")
 }
 
+@Test func demoAndOfflineFlagsSelectTheSameTestingMode() {
+    #expect(AppLaunchConfiguration(arguments: ["Swiftchat"]).mode == .normal)
+    #expect(AppLaunchConfiguration(arguments: ["Swiftchat", "--offline"]).mode == .offlineTesting)
+    #expect(AppLaunchConfiguration(arguments: ["Swiftchat", "--demo"]).mode == .offlineTesting)
+    #expect(AppLaunchConfiguration(arguments: ["Swiftchat", "--demo-voice"]).mode == .offlineTesting)
+    #expect(AppLaunchConfiguration(arguments: ["Swiftchat", "--demo-long-server-list"]).mode == .offlineTesting)
+}
+
+@MainActor
+@Test func networkDisabledNormalLaunchStopsSignedOutWithoutMockData() async {
+    let model = AppModel(launchMode: .normal, discordNetworkDisabledOverride: true)
+    #expect(model.sessionState == .restoring)
+    await model.start()
+
+    #expect(model.sessionState == .signedOut)
+    #expect(model.snapshot == nil)
+    #expect(model.visibleChannels.isEmpty)
+    #expect(!model.isOfflineTesting)
+}
+
+@MainActor
+@Test func interactiveSignInKeepsLoginPresentationAliveUntilBootstrapFinishes() async {
+    let provider = SuspendedBootstrapTestProvider()
+    let model = AppModel(
+        launchMode: .normal,
+        discordNetworkDisabledOverride: false,
+        restoresStoredSession: false,
+        authenticatedProviderFactory: { _, _ in provider }
+    )
+    await model.start()
+    #expect(model.sessionState == .signedOut)
+
+    let connection = Task {
+        await model.connectAuthenticatedAccount(
+            CredentialHandle(accountID: "93000"),
+            preservesInteractivePresentation: true
+        )
+    }
+    await provider.waitUntilBootstrapStarts()
+
+    // Switching to `.connecting` here destroys DiscordLoginView, whose
+    // disappearance cancels the task that is performing this bootstrap.
+    #expect(model.sessionState == .signedOut)
+
+    await provider.releaseBootstrap()
+    #expect(await connection.value)
+    #expect(model.sessionState == .workspace)
+    #expect(model.isAuthenticated)
+}
+
+@MainActor
+@Test func interactiveSignInFailureStaysSignedOutAndExposesBootstrapError() async {
+    let provider = SuspendedBootstrapTestProvider(bootstrapError: "fixture bootstrap stopped")
+    let model = AppModel(
+        launchMode: .normal,
+        discordNetworkDisabledOverride: false,
+        restoresStoredSession: false,
+        authenticatedProviderFactory: { _, _ in provider }
+    )
+    await model.start()
+
+    let connection = Task {
+        await model.connectAuthenticatedAccount(
+            CredentialHandle(accountID: "93000"),
+            preservesInteractivePresentation: true
+        )
+    }
+    await provider.waitUntilBootstrapStarts()
+    #expect(model.sessionState == .signedOut)
+
+    await provider.releaseBootstrap()
+    #expect(!(await connection.value))
+    #expect(model.sessionState == .signedOut)
+    #expect(model.errorMessage == "fixture bootstrap stopped")
+}
+
 @MainActor
 @Test func replyingTargetsTheSelectedMessageAndClearsAfterSending() async throws {
-    let model = AppModel(restoreStoredSession: false)
+    let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     let target = try #require(model.messages.first)
 
@@ -107,7 +310,7 @@ import Foundation
 
 @MainActor
 @Test func selectingVoiceChannelNavigatesWithoutJoiningOrLoadingMessages() async throws {
-    let model = AppModel(restoreStoredSession: false)
+    let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     let voiceChannel = try #require(model.visibleChannels.first(where: { $0.kind == .voice }))
 
@@ -132,7 +335,7 @@ import Foundation
 
 @MainActor
 @Test func selectingMemberLoadsFullProfile() async throws {
-    let model = AppModel(restoreStoredSession: false)
+    let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     let member = try #require(model.members.first)
 
@@ -140,6 +343,7 @@ import Foundation
     try await Task.sleep(for: .milliseconds(20))
 
     let profile = try #require(model.selectedProfile)
+    #expect(model.isInspectorProfilePresented)
     #expect(profile.id == member.id)
     #expect(!profile.badges.isEmpty)
     #expect(!profile.mutualGuilds.isEmpty)
@@ -147,9 +351,43 @@ import Foundation
 }
 
 @MainActor
+@Test func messageProfileDoesNotCompeteWithTheMemberInspectorPopover() async throws {
+    let model = AppModel(launchMode: .offlineTesting)
+    await model.start()
+    let member = try #require(model.members.first)
+    model.showInspector = false
+
+    model.showProfile(for: member.user)
+    try await Task.sleep(for: .milliseconds(20))
+
+    #expect(model.selectedMember?.id == member.id)
+    #expect(model.selectedProfile?.id == member.id)
+    #expect(!model.isInspectorProfilePresented)
+    #expect(!model.showInspector)
+
+    model.selectMember(member)
+    #expect(model.isInspectorProfilePresented)
+}
+
+@MainActor
+@Test func demoEmojiPreferencesAreIsolatedAndMockEmojisDoNotUseDiscordCDN() async throws {
+    let provider = MockChatProvider()
+    let model = AppModel(launchMode: .offlineTesting, provider: provider)
+    await model.start()
+
+    #expect(model.favoriteEmojiKeys.isEmpty)
+    #expect(model.emojiUsageCounts.isEmpty)
+    model.recordEmojiUse("native:✨")
+    #expect(model.emojiUsageCounts == ["native:✨": 1])
+
+    let guildID = try #require(model.selectedGuildID)
+    #expect(try await provider.emojis(in: guildID).isEmpty)
+}
+
+@MainActor
 @Test func channelLoadsAreSingleFlightCachedAndProtectedFromStaleResponses() async throws {
     let provider = ChannelLoadTestProvider()
-    let model = AppModel(provider: provider, restoreStoredSession: false)
+    let model = AppModel(launchMode: .offlineTesting, provider: provider)
 
     await model.start()
     let firstChannel = ChannelID(rawValue: 91_001)
@@ -174,7 +412,7 @@ import Foundation
 @MainActor
 @Test func voiceServerReallocationKeepsTheCallSelectedAndReconnects() async throws {
     let provider = VoiceMigrationTestProvider()
-    let model = AppModel(provider: provider, restoreStoredSession: false)
+    let model = AppModel(launchMode: .offlineTesting, provider: provider)
     await model.start()
     let voiceChannel = try #require(model.visibleChannels.first)
 
@@ -239,6 +477,61 @@ private actor ChannelLoadTestProvider: ChatProvider {
     func disconnect() async {}
 
     func requestCount(for channelID: ChannelID) -> Int { messageRequests[channelID, default: 0] }
+}
+
+private actor SuspendedBootstrapTestProvider: ChatProvider {
+    private let user = User(id: UserID(rawValue: 93_000), username: "tester", displayName: "Tester")
+    private let channel = Channel(id: ChannelID(rawValue: 93_001), guildID: nil, name: "general")
+    private var bootstrapStarted = false
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private var bootstrapContinuation: CheckedContinuation<Void, Never>?
+    private let bootstrapError: String?
+
+    init(bootstrapError: String? = nil) {
+        self.bootstrapError = bootstrapError
+    }
+
+    func bootstrap() async throws -> BootstrapSnapshot {
+        bootstrapStarted = true
+        startWaiters.forEach { $0.resume() }
+        startWaiters.removeAll()
+        await withCheckedContinuation { bootstrapContinuation = $0 }
+        if let bootstrapError {
+            throw ChatProviderError.invalidRequest(bootstrapError)
+        }
+        return BootstrapSnapshot(currentUser: user, guilds: [], channels: [channel], members: [])
+    }
+
+    func waitUntilBootstrapStarts() async {
+        if bootstrapStarted { return }
+        await withCheckedContinuation { startWaiters.append($0) }
+    }
+
+    func releaseBootstrap() {
+        bootstrapContinuation?.resume()
+        bootstrapContinuation = nil
+    }
+
+    func channels(in guildID: GuildID?) async throws -> [Channel] { [channel] }
+    func members(in guildID: GuildID?) async throws -> [Member] { [] }
+    func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
+        throw ChatProviderError.invalidRequest("Profiles are not part of this test.")
+    }
+    func currentStatus() async -> PresenceStatus { .online }
+    func updateStatus(_ status: PresenceStatus) async throws {}
+    func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
+        MessagePage(messages: [], hasMoreBefore: false)
+    }
+    func send(_ draft: SendMessageDraft) async throws -> Message {
+        throw ChatProviderError.invalidRequest("Sending is not part of this test.")
+    }
+    func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message {
+        throw ChatProviderError.invalidRequest("Editing is not part of this test.")
+    }
+    func delete(messageID: MessageID, channelID: ChannelID) async throws {}
+    func toggleReaction(_ emoji: String, messageID: MessageID, channelID: ChannelID) async throws {}
+    func eventStream() async -> AsyncStream<ClientEvent> { AsyncStream { $0.finish() } }
+    func disconnect() async {}
 }
 
 private actor VoiceMigrationTestProvider: ChatProvider {

@@ -1,17 +1,23 @@
 import AppKit
+import DiscordProtocol
 import SwiftUI
 
 @main
 struct SwiftchatApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var model: AppModel
+    private let launchConfiguration: AppLaunchConfiguration
 
     init() {
-        let arguments = ProcessInfo.processInfo.arguments
-        let useDemoData = arguments.contains("--demo")
-            || arguments.contains("--demo-voice")
-            || arguments.contains("--demo-voice-page")
-        _model = State(initialValue: AppModel(restoreStoredSession: !useDemoData))
+        let configuration = AppLaunchConfiguration(arguments: ProcessInfo.processInfo.arguments)
+        launchConfiguration = configuration
+        let provider: (any ChatProvider)? = configuration.mode == .offlineTesting
+            ? MockChatProvider(includesLongServerList: configuration.includesLongServerList)
+            : nil
+        _model = State(initialValue: AppModel(
+            launchMode: configuration.mode,
+            provider: provider
+        ))
     }
 
     var body: some Scene {
@@ -20,16 +26,16 @@ struct SwiftchatApp: App {
                 .frame(minWidth: 860, minHeight: 560)
                 .task {
                     await model.start()
-                    let arguments = ProcessInfo.processInfo.arguments
-                    if (arguments.contains("--demo-voice") || arguments.contains("--demo-voice-page")),
+                    if launchConfiguration.opensVoiceChannel,
                        let channel = model.visibleChannels.first(where: { $0.kind == .voice }) {
                         model.selectedChannelID = channel.id
-                        if arguments.contains("--demo-voice") { await model.joinVoice(channel) }
+                        if launchConfiguration.joinsVoiceChannel { await model.joinVoice(channel) }
                     }
                 }
         }
         .defaultSize(width: 1_280, height: 780)
         .windowToolbarStyle(.unified(showsTitle: false))
+        .windowBackgroundDragBehavior(.disabled)
         .commands { SwiftchatCommands() }
 
         Settings {

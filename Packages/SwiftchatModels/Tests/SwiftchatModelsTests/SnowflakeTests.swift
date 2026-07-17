@@ -22,3 +22,29 @@ import Testing
     #expect(member.roles.isEmpty)
     #expect(member.activityText == nil)
 }
+
+@Suite(.serialized)
+struct ClientNonceTests {
+    @Test func usesDiscordEpochAndDecodesToCreationTime() throws {
+        let date = Date(timeIntervalSince1970: 1_784_158_980.123)
+        let nonce = try #require(UInt64(ClientNonce.make(now: date)))
+        let decodedMilliseconds = (nonce >> 22) + ClientNonce.discordEpochMilliseconds
+
+        #expect(decodedMilliseconds == 1_784_158_980_123)
+        #expect(nonce & 0x3F_FFFF <= 0x0FFF)
+    }
+
+    @Test func usesASequenceWithinTheSameMillisecond() throws {
+        let date = Date(timeIntervalSince1970: 1_784_158_981.123)
+        let first = try #require(UInt64(ClientNonce.make(now: date)))
+        let second = try #require(UInt64(ClientNonce.make(now: date)))
+
+        #expect(second == first + 1)
+        #expect((first >> 22) == (second >> 22))
+    }
+
+    @Test func doesNotUnderflowBeforeDiscordEpoch() {
+        let date = Date(timeIntervalSince1970: 1_000)
+        #expect(ClientNonce.make(now: date) == "0")
+    }
+}

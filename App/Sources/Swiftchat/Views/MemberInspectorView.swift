@@ -5,6 +5,7 @@ import SwiftUI
 struct MemberInspectorView: View {
     let sections: [MemberSection]
     let selectedMemberID: UserID?
+    let isProfilePresented: Bool
     let profile: UserProfile?
     let isLoadingProfile: Bool
     let profileErrorMessage: String?
@@ -18,6 +19,7 @@ struct MemberInspectorView: View {
                     MemberSectionView(
                         section: section,
                         selectedMemberID: selectedMemberID,
+                        isProfilePresented: isProfilePresented,
                         profile: profile,
                         isLoadingProfile: isLoadingProfile,
                         profileErrorMessage: profileErrorMessage,
@@ -86,6 +88,7 @@ struct MemberSection: Identifiable, Equatable {
 private struct MemberSectionView: View {
     let section: MemberSection
     let selectedMemberID: UserID?
+    let isProfilePresented: Bool
     let profile: UserProfile?
     let isLoadingProfile: Bool
     let profileErrorMessage: String?
@@ -105,6 +108,7 @@ private struct MemberSectionView: View {
                 MemberRow(
                     member: member,
                     isSelected: selectedMemberID == member.id,
+                    isProfilePresented: isProfilePresented && selectedMemberID == member.id,
                     profile: selectedMemberID == member.id ? profile : nil,
                     isLoadingProfile: selectedMemberID == member.id && isLoadingProfile,
                     profileErrorMessage: selectedMemberID == member.id ? profileErrorMessage : nil,
@@ -119,6 +123,7 @@ private struct MemberSectionView: View {
 private struct MemberRow: View {
     let member: Member
     let isSelected: Bool
+    let isProfilePresented: Bool
     let profile: UserProfile?
     let isLoadingProfile: Bool
     let profileErrorMessage: String?
@@ -179,7 +184,7 @@ private struct MemberRow: View {
         .onHover { isHovered = $0 }
         .popover(
             isPresented: Binding(
-                get: { isSelected },
+                get: { isSelected && isProfilePresented },
                 set: { if !$0 { dismissProfile() } }
             ),
             attachmentAnchor: .rect(.bounds),

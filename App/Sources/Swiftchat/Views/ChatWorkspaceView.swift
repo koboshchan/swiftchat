@@ -16,6 +16,7 @@ struct ChatWorkspaceView: View {
                     MemberInspectorView(
                         sections: model.memberSections,
                         selectedMemberID: model.selectedMember?.id,
+                        isProfilePresented: model.isInspectorProfilePresented,
                         profile: model.selectedProfile,
                         isLoadingProfile: model.isLoadingProfile,
                         profileErrorMessage: model.profileErrorMessage,

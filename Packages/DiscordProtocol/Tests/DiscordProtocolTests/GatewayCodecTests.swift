@@ -12,6 +12,10 @@ import Testing
 @Test func productionBaselineMatchesObservedBootstrap() {
     let baseline = DiscordProductionBaseline.july2026
     #expect(baseline.apiVersion == 9)
+    #expect(baseline.webBuildNumber == 579_073)
+    #expect(baseline.desktopVersion == "0.0.401")
+    #expect(baseline.webGatewayEncoding == "json")
+    #expect(baseline.webGatewayCompression == "zlib-stream")
     #expect(baseline.desktopGatewayEncoding == "etf")
     #expect(baseline.desktopGatewayCompression == "zstd-stream")
     #expect(baseline.defaultCapabilities == 1_734_653)

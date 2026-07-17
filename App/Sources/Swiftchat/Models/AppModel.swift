@@ -9,6 +9,18 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
+    enum SessionState: Equatable {
+        case restoring
+        case signedOut
+        case connecting
+        case workspace
+    }
+
+    struct LocalTypingTiming: Sendable {
+        var debounce: Duration = .seconds(1.5)
+        var throttle: Duration = .seconds(8)
+    }
+
     private(set) var snapshot: BootstrapSnapshot?
     private(set) var visibleChannels: [Channel] = []
     private(set) var selectedChannel: Channel?
@@ -26,7 +38,9 @@ final class AppModel {
     private(set) var currentStatus: PresenceStatus = .offline
     private(set) var connectionState: ConnectionState = .disconnected
     private(set) var isAuthenticated = false
-    private(set) var typingText: String?
+    private(set) var sessionState: SessionState
+    let launchMode: AppLaunchMode
+    let typingState: TypingStateModel
     private(set) var isLoading = false
     private(set) var isLoadingMessages = false
     private(set) var isLoadingEarlier = false
@@ -37,6 +51,7 @@ final class AppModel {
     private(set) var selectedProfile: UserProfile?
     private(set) var isLoadingProfile = false
     private(set) var profileErrorMessage: String?
+    private(set) var isInspectorProfilePresented = false
     private(set) var activeVoiceChannel: Channel?
     private(set) var voiceSessionState: VoiceSessionState = .idle
     private(set) var voiceParticipants: [VoiceRemoteParticipant] = []
@@ -63,6 +78,7 @@ final class AppModel {
     var selectedChannelID: ChannelID? {
         didSet {
             guard selectedChannelID != oldValue else { return }
+            if let oldValue { lastTypingRequestAt[oldValue] = nil }
             selectedChannel = snapshot?.channels.first { $0.id == selectedChannelID }
                 ?? visibleChannels.first { $0.id == selectedChannelID }
             beginSelectedChannelLoad()
@@ -76,7 +92,11 @@ final class AppModel {
     @ObservationIgnored private var provider: any ChatProvider
     @ObservationIgnored private var database: SwiftchatDatabase?
     @ObservationIgnored private var eventTask: Task<Void, Never>?
-    @ObservationIgnored private var typingTask: Task<Void, Never>?
+    @ObservationIgnored private var localTypingTask: Task<Void, Never>?
+    @ObservationIgnored private var localTypingChannelID: ChannelID?
+    @ObservationIgnored private var lastTypingRequestAt: [ChannelID: Date] = [:]
+    @ObservationIgnored private var localTypingGeneration: UInt64 = 0
+    @ObservationIgnored private let localTypingTiming: LocalTypingTiming
     @ObservationIgnored private var profileTask: Task<Void, Never>?
     @ObservationIgnored private var channelLoadTask: Task<Void, Never>?
     @ObservationIgnored private var guildActivationTask: Task<Void, Never>?
@@ -88,23 +108,58 @@ final class AppModel {
     @ObservationIgnored private var channelLoadGeneration = 0
     @ObservationIgnored private var messageCache: [ChannelID: [Message]] = [:]
     @ObservationIgnored private var hasMoreCache: [ChannelID: Bool] = [:]
-    @ObservationIgnored private let restoreStoredSession: Bool
     @ObservationIgnored private let discordNetworkDisabled: Bool
+    @ObservationIgnored private let restoresStoredSession: Bool
+    @ObservationIgnored private let authenticatedProviderFactory: (CredentialHandle, String?) -> any ChatProvider
+    @ObservationIgnored private let persistsEmojiPreferences: Bool
     @ObservationIgnored private var didAttemptSessionRestore = false
     @ObservationIgnored private var credentialHandle: CredentialHandle?
     @ObservationIgnored private var didAttemptDiscordEmojiSettings = false
 
-    init(provider: any ChatProvider = MockChatProvider(), restoreStoredSession: Bool = true) {
-        self.provider = provider
-        discordNetworkDisabled = CommandLine.arguments.contains("--offline")
-            || ProcessInfo.processInfo.environment["SWIFTCHAT_DISABLE_DISCORD_NETWORK"] == "1"
-        self.restoreStoredSession = restoreStoredSession && !discordNetworkDisabled
-        favoriteEmojiKeys = Set(UserDefaults.standard.stringArray(forKey: "dev.swiftchat.favorite-emojis") ?? [])
-        emojiUsageCounts = UserDefaults.standard.dictionary(forKey: "dev.swiftchat.emoji-usage") as? [String: Int] ?? [:]
-        database = try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
+    init(
+        launchMode: AppLaunchMode,
+        provider: (any ChatProvider)? = nil,
+        discordNetworkDisabledOverride: Bool? = nil,
+        restoresStoredSession: Bool = true,
+        authenticatedProviderFactory: ((CredentialHandle, String?) -> any ChatProvider)? = nil,
+        typingExpiry: Duration = .seconds(10),
+        localTypingTiming: LocalTypingTiming = LocalTypingTiming()
+    ) {
+        self.launchMode = launchMode
+        self.provider = provider ?? (launchMode == .offlineTesting ? MockChatProvider() : SignedOutChatProvider())
+        sessionState = launchMode == .offlineTesting ? .connecting : .restoring
+        typingState = TypingStateModel(expiry: typingExpiry)
+        self.localTypingTiming = localTypingTiming
+        discordNetworkDisabled = discordNetworkDisabledOverride
+            ?? (launchMode == .offlineTesting
+                || ProcessInfo.processInfo.environment["SWIFTCHAT_DISABLE_DISCORD_NETWORK"] == "1")
+        self.restoresStoredSession = restoresStoredSession
+        self.authenticatedProviderFactory = authenticatedProviderFactory ?? { handle, fingerprint in
+            DiscordRESTProvider(
+                credentials: KeychainCredentialStore(),
+                handle: handle,
+                fingerprint: fingerprint
+            )
+        }
+        persistsEmojiPreferences = launchMode == .normal
+        favoriteEmojiKeys = launchMode == .normal
+            ? Set(UserDefaults.standard.stringArray(forKey: "dev.swiftchat.favorite-emojis") ?? [])
+            : []
+        emojiUsageCounts = launchMode == .normal
+            ? UserDefaults.standard.dictionary(forKey: "dev.swiftchat.emoji-usage") as? [String: Int] ?? [:]
+            : [:]
+        database = launchMode == .normal
+            ? try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
+            : try? SwiftchatDatabase(inMemory: true)
     }
 
-    func connectAuthenticatedAccount(_ handle: CredentialHandle) async -> Bool {
+    var isOfflineTesting: Bool { launchMode == .offlineTesting }
+    var isDiscordNetworkingDisabled: Bool { discordNetworkDisabled }
+
+    func connectAuthenticatedAccount(
+        _ handle: CredentialHandle,
+        preservesInteractivePresentation: Bool = false
+    ) async -> Bool {
         guard !discordNetworkDisabled else {
             errorMessage = "Discord networking is disabled in offline UI mode."
             return false
@@ -112,13 +167,19 @@ final class AppModel {
         await leaveVoice()
         await provider.disconnect()
         eventTask?.cancel()
-        provider = DiscordRESTProvider(credentials: KeychainCredentialStore(), handle: handle)
+        stopLocalTyping(clearThrottle: true)
+        typingState.clearAll()
+        if !preservesInteractivePresentation { sessionState = .connecting }
+        let fingerprint = await UserDefaultsDiscordFingerprintStore.shared.load()
+        provider = authenticatedProviderFactory(handle, fingerprint)
         credentialHandle = handle
         database = AccountID(handle.accountID).flatMap { try? SwiftchatDatabase(accountID: $0) }
         snapshot = nil
         emojisByGuild = [:]
         loadingEmojiGuildIDs = []
         emojiLoadErrorsByGuild = [:]
+        discordFavoriteEmojiKeys = []
+        discordEmojiUsageScores = [:]
         didAttemptDiscordEmojiSettings = false
         voiceStates = [:]
         visibleChannels = []
@@ -130,8 +191,9 @@ final class AppModel {
         hasMoreCache = [:]
         dismissProfile()
         errorMessage = nil
-        await start()
+        await start(publishesSessionState: !preservesInteractivePresentation)
         isAuthenticated = snapshot != nil
+        sessionState = isAuthenticated ? .workspace : .signedOut
         return isAuthenticated
     }
 
@@ -139,7 +201,8 @@ final class AppModel {
         await leaveVoice()
         await provider.disconnect()
         eventTask?.cancel()
-        typingTask?.cancel()
+        stopLocalTyping(clearThrottle: true)
+        typingState.clearAll()
         if let credentialHandle {
             do {
                 try await KeychainCredentialStore().remove(credentialHandle)
@@ -149,12 +212,16 @@ final class AppModel {
             }
         }
         credentialHandle = nil
-        provider = MockChatProvider()
-        database = try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
+        provider = launchMode == .offlineTesting ? MockChatProvider() : SignedOutChatProvider()
+        database = launchMode == .offlineTesting
+            ? try? SwiftchatDatabase(inMemory: true)
+            : try? SwiftchatDatabase(accountID: AccountID(rawValue: 1))
         snapshot = nil
         emojisByGuild = [:]
         loadingEmojiGuildIDs = []
         emojiLoadErrorsByGuild = [:]
+        discordFavoriteEmojiKeys = []
+        discordEmojiUsageScores = [:]
         didAttemptDiscordEmojiSettings = false
         voiceStates = [:]
         visibleChannels = []
@@ -169,18 +236,33 @@ final class AppModel {
         connectionState = .disconnected
         isAuthenticated = false
         didAttemptSessionRestore = true
-        await start()
+        sessionState = launchMode == .offlineTesting ? .connecting : .signedOut
+        if launchMode == .offlineTesting { await start() }
     }
 
-    func start() async {
+    func start(publishesSessionState: Bool = true) async {
         guard snapshot == nil else { return }
-        if restoreStoredSession, !didAttemptSessionRestore {
+        if launchMode == .normal, discordNetworkDisabled {
             didAttemptSessionRestore = true
-            if let handles = try? await KeychainCredentialStore().handles(), let handle = handles.first {
+            isLoading = false
+            sessionState = .signedOut
+            return
+        }
+        if launchMode == .normal, !didAttemptSessionRestore {
+            didAttemptSessionRestore = true
+            if restoresStoredSession,
+               let handles = try? await KeychainCredentialStore().handles(),
+               let handle = handles.first {
                 _ = await connectAuthenticatedAccount(handle)
                 return
             }
         }
+        if launchMode == .normal, credentialHandle == nil {
+            isLoading = false
+            sessionState = .signedOut
+            return
+        }
+        if publishesSessionState { sessionState = .connecting }
         let stream = await provider.eventStream()
         eventTask = Task { [weak self] in
             for await event in stream {
@@ -198,8 +280,13 @@ final class AppModel {
             currentStatus = await provider.currentStatus()
             await activateGuild(value.guilds.first?.id)
             await channelLoadTask?.value
+            if publishesSessionState { sessionState = .workspace }
         } catch {
             errorMessage = error.localizedDescription
+            if launchMode == .normal {
+                isAuthenticated = false
+                if publishesSessionState { sessionState = .signedOut }
+            }
         }
     }
 
@@ -265,13 +352,17 @@ final class AppModel {
 
     func recordEmojiUse(_ key: String) {
         emojiUsageCounts[key, default: 0] += 1
-        UserDefaults.standard.set(emojiUsageCounts, forKey: "dev.swiftchat.emoji-usage")
+        if persistsEmojiPreferences {
+            UserDefaults.standard.set(emojiUsageCounts, forKey: "dev.swiftchat.emoji-usage")
+        }
     }
 
     func toggleFavoriteEmoji(_ key: String) {
         if favoriteEmojiKeys.contains(key) { favoriteEmojiKeys.remove(key) }
         else { favoriteEmojiKeys.insert(key) }
-        UserDefaults.standard.set(Array(favoriteEmojiKeys), forKey: "dev.swiftchat.favorite-emojis")
+        if persistsEmojiPreferences {
+            UserDefaults.standard.set(Array(favoriteEmojiKeys), forKey: "dev.swiftchat.favorite-emojis")
+        }
     }
 
     func composerText(for emoji: DiscordEmoji) -> String {
@@ -301,8 +392,7 @@ final class AppModel {
         let generation = channelLoadGeneration
         messageLoadError = nil
         isLoadingEarlier = false
-        typingTask?.cancel()
-        typingText = nil
+        stopLocalTyping(clearThrottle: true)
         replyingTo = nil
 
         guard let channelID = selectedChannelID, selectedChannel?.kind != .voice else {
@@ -389,23 +479,98 @@ final class AppModel {
 
     func cancelReply() {
         replyingTo = nil
+        NotificationCenter.default.post(name: .swiftchatFocusComposer, object: nil)
     }
 
     func updateDraft(_ value: String) {
         draft = value
+        scheduleLocalTyping(for: value)
         guard let channelID = selectedChannelID else { return }
         Task { try? await database?.saveDraft(value, channelID: channelID) }
     }
 
-    func send(attachments: [URL] = []) async {
-        guard let channelID = selectedChannelID else { return }
+    private func scheduleLocalTyping(for value: String) {
+        guard !value.isEmpty,
+              connectionState == .ready,
+              let channel = selectedChannel,
+              Self.supportsTyping(channel.kind) else {
+            stopLocalTyping(clearThrottle: value.isEmpty)
+            return
+        }
+        if localTypingTask != nil, localTypingChannelID == channel.id { return }
+        stopLocalTyping(clearThrottle: false)
+        localTypingGeneration &+= 1
+        let generation = localTypingGeneration
+        localTypingChannelID = channel.id
+        let now = Date.now
+        let debounce = Self.seconds(localTypingTiming.debounce)
+        let remainingThrottle = lastTypingRequestAt[channel.id]
+            .map { max(0, Self.seconds(localTypingTiming.throttle) - now.timeIntervalSince($0)) } ?? 0
+        let delay = max(debounce, remainingThrottle)
+        localTypingTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) }
+            catch { return }
+            await self?.performLocalTyping(channelID: channel.id, generation: generation)
+        }
+    }
+
+    private func performLocalTyping(channelID: ChannelID, generation: UInt64) async {
+        guard generation == localTypingGeneration,
+              localTypingChannelID == channelID,
+              selectedChannelID == channelID,
+              !draft.isEmpty,
+              connectionState == .ready,
+              let selectedChannel,
+              Self.supportsTyping(selectedChannel.kind) else { return }
+        localTypingTask = nil
+        localTypingChannelID = nil
+        // Count the attempt, not only a successful response. A failed mutation is
+        // not immediately retried by subsequent keystrokes.
+        lastTypingRequestAt[channelID] = .now
+        do {
+            try await provider.sendTyping(in: channelID)
+        } catch is CancellationError {
+            return
+        } catch {
+            // Typing is best-effort. The shared provider still applies its safety
+            // circuit and mutation retry rules; composer input remains available.
+        }
+    }
+
+    private func stopLocalTyping(clearThrottle: Bool) {
+        localTypingGeneration &+= 1
+        localTypingTask?.cancel()
+        localTypingTask = nil
+        if clearThrottle {
+            if let localTypingChannelID { lastTypingRequestAt[localTypingChannelID] = nil }
+            if let selectedChannelID { lastTypingRequestAt[selectedChannelID] = nil }
+        }
+        localTypingChannelID = nil
+    }
+
+    private static func supportsTyping(_ kind: ChannelKindValue) -> Bool {
+        switch kind {
+        case .text, .announcement, .directMessage, .groupDirectMessage: true
+        case .forum, .voice, .unknown: false
+        }
+    }
+
+    private static func seconds(_ duration: Duration) -> TimeInterval {
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1e18
+    }
+
+    @discardableResult
+    func send(attachments: [URL] = []) async -> Bool {
+        guard let channelID = selectedChannelID else { return false }
         let content = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty || !attachments.isEmpty else { return }
+        guard !content.isEmpty || !attachments.isEmpty else { return false }
         let replyTo = replyingTo?.id
         let replyPreview = replyingTo.map {
             MessageReplyPreview(messageID: $0.id, author: $0.author, content: $0.content)
         }
         let outgoing = SendMessageDraft(channelID: channelID, content: content, replyTo: replyTo, attachmentURLs: attachments)
+        stopLocalTyping(clearThrottle: true)
         let optimistic = Message(
             id: MessageID(rawValue: UInt64.max - UInt64(messages.count)), channelID: channelID,
             author: snapshot?.currentUser ?? User(id: UserID(rawValue: 1), username: "me", displayName: "Me"),
@@ -420,9 +585,11 @@ final class AppModel {
             let confirmed = try await provider.send(outgoing)
             reconcile(confirmed)
             try await database?.save(messages: [confirmed])
+            return true
         } catch {
             if let index = messages.firstIndex(where: { $0.nonce == outgoing.nonce }) { messages[index].outboxState = .failed }
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
@@ -757,15 +924,17 @@ final class AppModel {
     }
 
     func selectMember(_ member: Member) {
-        if selectedMember?.id == member.id {
+        if selectedMember?.id == member.id, isInspectorProfilePresented {
             dismissProfile()
             return
         }
+        isInspectorProfilePresented = true
+        if selectedMember?.id == member.id { return }
         presentProfile(for: member)
     }
 
     func showProfile(for user: User) {
-        showInspector = true
+        isInspectorProfilePresented = false
         let member = members.first(where: { $0.id == user.id })
             ?? Member(user: user, roleName: "Member", status: .offline)
         presentProfile(for: member)
@@ -803,6 +972,7 @@ final class AppModel {
         selectedProfile = nil
         isLoadingProfile = false
         profileErrorMessage = nil
+        isInspectorProfilePresented = false
     }
 
     func dismissError() { errorMessage = nil }
@@ -838,8 +1008,14 @@ final class AppModel {
 
     private func consume(_ event: ClientEvent) {
         switch event {
-        case let .connectionChanged(state): connectionState = state
+        case let .connectionChanged(state):
+            connectionState = state
+            if state != .ready {
+                stopLocalTyping(clearThrottle: true)
+                typingState.clearAll()
+            }
         case let .messageCreated(message):
+            typingState.clear(userID: message.author.id, in: message.channelID)
             persist(message)
             if message.channelID == selectedChannelID { reconcile(message) }
             else { cache(message) }
@@ -856,13 +1032,11 @@ final class AppModel {
                 messageCache[channelID]?.removeAll { $0.id == messageID }
             }
         case let .typing(channelID, user):
-            guard channelID == selectedChannelID else { return }
-            typingText = "\(user.displayName) is typing…"
-            typingTask?.cancel()
-            typingTask = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(4))
-                self?.typingText = nil
-            }
+            typingState.receive(
+                channelID: channelID,
+                user: user,
+                currentUserID: snapshot?.currentUser.id
+            )
         case let .membersChanged(guildID, value):
             guard guildID == selectedGuildID else { return }
             members = value

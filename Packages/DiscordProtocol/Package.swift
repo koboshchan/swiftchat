@@ -7,7 +7,11 @@ let package = Package(
     products: [.library(name: "DiscordProtocol", targets: ["DiscordProtocol"])],
     dependencies: [.package(path: "../SwiftchatModels")],
     targets: [
-        .target(name: "DiscordProtocol", dependencies: ["SwiftchatModels"]),
+        .target(
+            name: "DiscordProtocol",
+            dependencies: ["SwiftchatModels"],
+            resources: [.process("Resources")]
+        ),
         .testTarget(name: "DiscordProtocolTests", dependencies: ["DiscordProtocol"]),
     ]
 )

@@ -11,6 +11,7 @@ public protocol ChatProvider: Sendable {
     func currentStatus() async -> PresenceStatus
     func updateStatus(_ status: PresenceStatus) async throws
     func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage
+    func sendTyping(in channelID: ChannelID) async throws
     func send(_ draft: SendMessageDraft) async throws -> Message
     func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message
     func delete(messageID: MessageID, channelID: ChannelID) async throws
@@ -35,6 +36,8 @@ public protocol ChatProvider: Sendable {
 public extension ChatProvider {
     func emojis(in guildID: GuildID) async throws -> [DiscordEmoji] { [] }
     func emojiUserSettings() async throws -> EmojiUserSettings { EmojiUserSettings() }
+
+    func sendTyping(in channelID: ChannelID) async throws {}
 
     func joinVoice(
         channelID: ChannelID,

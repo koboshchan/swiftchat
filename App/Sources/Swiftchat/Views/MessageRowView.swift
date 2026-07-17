@@ -16,6 +16,7 @@ struct MessageRowView: View, Equatable {
     let react: (String) -> Void
     @State private var isEditing = false
     @State private var isHovering = false
+    @State private var isReactionPickerPresented = false
     @State private var editText = ""
     @FocusState private var editFieldFocused: Bool
 
@@ -60,10 +61,15 @@ struct MessageRowView: View, Equatable {
         .background(isHovering ? Color.primary.opacity(0.055) : .clear)
         .contentShape(Rectangle())
         .overlay(alignment: .topTrailing) {
-            if isHovering, !isEditing {
+            if MessageActionVisibilityPolicy.isVisible(
+                isRowHovered: isHovering,
+                isReactionPickerPresented: isReactionPickerPresented,
+                isEditing: isEditing
+            ) {
                 MessageActionCapsule(
                     model: model,
                     canEdit: canEdit,
+                    isReactionPickerPresented: $isReactionPickerPresented,
                     edit: beginEditing,
                     reply: reply,
                     react: react,
@@ -75,7 +81,7 @@ struct MessageRowView: View, Equatable {
             }
         }
         .onHover { isHovering = $0 }
-        .zIndex(isHovering ? 10 : 0)
+        .zIndex(isHovering || isReactionPickerPresented ? 10 : 0)
         .overlay {
             MessageContextMenuBridge(
                 canEdit: canEdit,
@@ -109,6 +115,16 @@ struct MessageRowView: View, Equatable {
     private func copyText() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(message.content, forType: .string)
+    }
+}
+
+enum MessageActionVisibilityPolicy {
+    nonisolated static func isVisible(
+        isRowHovered: Bool,
+        isReactionPickerPresented: Bool,
+        isEditing: Bool
+    ) -> Bool {
+        !isEditing && (isRowHovered || isReactionPickerPresented)
     }
 }
 
@@ -196,7 +212,7 @@ private struct MessageContextMenuBridge: NSViewRepresentable {
         func makeMenu() -> NSMenu {
             let menu = NSMenu()
             menu.autoenablesItems = false
-            menu.addItem(menuItem("Add Reaction", systemImage: "face.smiling", action: #selector(addReaction)))
+            menu.addItem(menuItem("Add Reaction", systemImage: "face.smiling.inverse", action: #selector(addReaction)))
             menu.addItem(menuItem("Reply", systemImage: "arrowshape.turn.up.left", action: #selector(replyToMessage)))
             if canEdit {
                 menu.addItem(menuItem("Edit Message", systemImage: "pencil", action: #selector(editMessage)))
@@ -274,6 +290,7 @@ private final class MessageContextMenuHitView: NSView {
 private struct MessageActionCapsule: View {
     let model: AppModel
     let canEdit: Bool
+    @Binding var isReactionPickerPresented: Bool
     let edit: () -> Void
     let reply: () -> Void
     let react: (String) -> Void
@@ -283,7 +300,11 @@ private struct MessageActionCapsule: View {
     var body: some View {
         GlassEffectContainer(spacing: 0) {
             HStack(spacing: 1) {
-                ReactionActionMenu(model: model, react: react)
+                ReactionActionMenu(
+                    model: model,
+                    isPickerPresented: $isReactionPickerPresented,
+                    react: react
+                )
                 MessageActionButton(systemImage: "arrowshape.turn.up.left", help: "Reply", action: reply)
                 if canEdit {
                     MessageActionButton(systemImage: "pencil", help: "Edit message", action: edit)
@@ -309,6 +330,7 @@ private struct MessageActionButton: View {
     var body: some View {
         Button(role: role, action: action) {
             Image(systemName: systemImage)
+                .symbolVariant(.none)
                 .font(.callout.weight(.medium))
                 .foregroundStyle(iconColor)
                 .frame(width: 28, height: 28)
@@ -333,26 +355,27 @@ private struct MessageActionButton: View {
 
 private struct ReactionActionMenu: View {
     let model: AppModel
+    @Binding var isPickerPresented: Bool
     let react: (String) -> Void
     @State private var isHovering = false
-    @State private var isPickerPresented = false
 
     var body: some View {
         ZStack {
             Circle()
                 .fill(isHovering ? Color.primary.opacity(0.14) : .clear)
 
-            Button { isPickerPresented.toggle() } label: {
-                Image(systemName: "face.smiling")
+            Button { presentPicker() } label: {
+                Image(systemName: "face.smiling.inverse")
+                    .symbolVariant(.none)
                     .font(.callout.weight(.medium))
                     .foregroundStyle(.primary)
                     .frame(width: 28, height: 28)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .popover(isPresented: $isPickerPresented) {
-                EmojiPickerView(model: model) { selection in
-                    switch selection {
+            .popover(isPresented: $isPickerPresented, arrowEdge: .trailing) {
+                EmojiPickerView(model: model) { activation in
+                    switch activation.selection {
                     case let .native(value): react(value)
                     case let .custom(emoji): react(emoji.messageToken)
                     }
@@ -365,6 +388,17 @@ private struct ReactionActionMenu: View {
         .onHover { isHovering = $0 }
         .help("Add reaction")
     }
+
+    private func presentPicker() {
+        guard !isPickerPresented else {
+            isPickerPresented = false
+            return
+        }
+        Task { @MainActor in
+            await Task.yield()
+            isPickerPresented = true
+        }
+    }
 }
 
 private struct MessageReplyContext: View {
@@ -373,7 +407,7 @@ private struct MessageReplyContext: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: "arrowshape.turn.up.left.fill")
+            Image(systemName: "arrowshape.turn.up.left")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
             MessageProfileAvatar(model: model, user: preview.author, size: 16)
@@ -568,15 +602,22 @@ private struct MessageProfilePopoverContent: View {
     let userID: UserID
 
     var body: some View {
-        if let member = model.selectedMember, member.id == userID {
-            MemberProfilePopover(
-                member: member,
-                profile: model.selectedProfile,
-                isLoading: model.isLoadingProfile,
-                errorMessage: model.profileErrorMessage
-            )
-        } else {
-            ProgressView().padding(40)
+        ZStack {
+            if let member = model.selectedMember, member.id == userID {
+                MemberProfilePopover(
+                    member: member,
+                    profile: model.selectedProfile,
+                    isLoading: model.isLoadingProfile,
+                    errorMessage: model.profileErrorMessage
+                )
+            } else {
+                ProgressView().padding(40)
+            }
+        }
+        .onDisappear {
+            if !model.isInspectorProfilePresented, model.selectedMember?.id == userID {
+                model.dismissProfile()
+            }
         }
     }
 }
@@ -653,18 +694,24 @@ private struct StaticImageAttachmentView: View {
     let pixelHeight: Int?
 
     var body: some View {
-        AsyncImage(request: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)) { phase in
-            switch phase {
-            case let .success(image):
-                image.resizable().scaledToFit()
-            case .failure:
-                Image(systemName: "photo.badge.exclamationmark")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.quaternary)
-            default:
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        ZStack {
+            if url.isFileURL {
+                AnimatedRemoteImage(url: url, isLooping: false)
+            } else {
+                AsyncImage(request: URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad)) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image.resizable().scaledToFit()
+                    case .failure:
+                        Image(systemName: "photo.badge.exclamationmark")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(.quaternary)
+                    default:
+                        ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
             }
         }
         .frame(width: displaySize.width, height: displaySize.height)
@@ -688,7 +735,7 @@ private struct FileAttachmentCard: View {
     var body: some View {
         Link(destination: url) {
             HStack(spacing: 10) {
-                Image(systemName: "doc.fill").font(.title2)
+                Image(systemName: "doc").font(.title2)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(filename).lineLimit(1)
                     if size > 0 {

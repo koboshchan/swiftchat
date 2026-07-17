@@ -19,3 +19,4 @@ xcuserdata/
 *.p12
 *.mobileprovision
 Package.resolved
+!App/Package.resolved
