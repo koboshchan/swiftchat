@@ -20,6 +20,6 @@ Remote typing is held by a dedicated Main Actor observable keyed by channel and 
 
 Authentication is a native SwiftUI flow. It obtains Discord's server-issued fingerprint, submits the password login request, presents native MFA choices, presents only Discord's hCaptcha challenge component when Discord requests one, validates `/users/@me`, and stores the resulting credential through `KeychainCredentialStore`. There is no embedded Discord login page and a normal signed-out launch has no mock guilds, channels, messages, or placeholder account. Plugins never receive the credential or its handle.
 
-The `.icon` source lives in `App/Packaging/Swiftchat.icon`. The shell-first packaging script compiles it directly with `actool` into the app bundle, so an Xcode project is not required and SwiftPM remains the clone/build source of truth.
+The default `.icon` source lives in `App/Packaging/Swiftchat.icon`, with `App/Packaging/SwiftChat Flower.icon` included as a self-build alternative selected through `SWIFTCHAT_APP_ICON`. The shell-first packaging script compiles the selected source directly with `actool` into the app bundle, so an Xcode project is not required and SwiftPM remains the clone/build source of truth.
 
 The `SwiftchatPluginHost` executable is intentionally inert. It establishes a separate signing/process target for the future WASI runtime without loading untrusted code in the app process.

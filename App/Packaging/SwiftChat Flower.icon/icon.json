@@ -19,7 +19,7 @@
           "image-name" : "sakura-layer-05-deep-details.svg",
           "name" : "sakura-layer-05-deep-details",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.56,
             "translation-in-points" : [
               0,
               0
@@ -27,14 +27,8 @@
           }
         }
       ],
+      "lighting" : "individual",
       "name" : "Top Layer",
-      "position" : {
-        "scale" : 0.38,
-        "translation-in-points" : [
-          316.515625,
-          -182.75
-        ]
-      },
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.6
@@ -50,7 +44,7 @@
           "image-name" : "sakura-layer-02-petal-fill.svg",
           "name" : "sakura-layer-02-petal-fill",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.56,
             "translation-in-points" : [
               0,
               0
@@ -61,7 +55,7 @@
           "image-name" : "sakura-layer-01-base 2.svg",
           "name" : "sakura-layer-01-base 2",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.56,
             "translation-in-points" : [
               0,
               0
@@ -69,15 +63,7 @@
           }
         }
       ],
-      "lighting" : "individual",
       "name" : "Middle Layer",
-      "position" : {
-        "scale" : 0.38,
-        "translation-in-points" : [
-          316.515625,
-          -182.75
-        ]
-      },
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.6
@@ -93,7 +79,7 @@
           "image-name" : "sakura-layer-04-mid-shadows.svg",
           "name" : "sakura-layer-04-mid-shadows",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.56,
             "translation-in-points" : [
               0,
               0
@@ -104,7 +90,7 @@
           "image-name" : "sakura-layer-03-light-details.svg",
           "name" : "sakura-layer-03-light-details",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.56,
             "translation-in-points" : [
               0,
               0
@@ -114,59 +100,6 @@
       ],
       "lighting" : "combined",
       "name" : "Bottom Layer",
-      "position" : {
-        "scale" : 0.38,
-        "translation-in-points" : [
-          316.515625,
-          -182.75
-        ]
-      },
-      "shadow" : {
-        "kind" : "neutral",
-        "opacity" : 0.6
-      },
-      "translucency" : {
-        "enabled" : true,
-        "value" : 0.2
-      }
-    },
-    {
-      "layers" : [
-        {
-          "blend-mode" : "normal",
-          "fill-specializations" : [
-            {
-              "value" : "system-light"
-            },
-            {
-              "appearance" : "dark",
-              "value" : {
-                "automatic-gradient" : "display-p3:0.92549,0.75294,0.90196,1.00000",
-                "orientation" : {
-                  "start" : {
-                    "x" : 0.5,
-                    "y" : 1
-                  },
-                  "stop" : {
-                    "x" : 0.5,
-                    "y" : 0
-                  }
-                }
-              }
-            }
-          ],
-          "image-name" : "discord-rounded-icon-composer.svg",
-          "name" : "Discord Icon",
-          "position" : {
-            "scale" : 0.84,
-            "translation-in-points" : [
-              0,
-              10.634256810580496
-            ]
-          }
-        }
-      ],
-      "name" : "Discord Icon",
       "shadow" : {
         "kind" : "neutral",
         "opacity" : 0.6

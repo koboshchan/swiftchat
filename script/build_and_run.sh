@@ -12,7 +12,12 @@ CONTENTS="$APP_BUNDLE/Contents"
 MACOS="$CONTENTS/MacOS"
 FRAMEWORKS="$CONTENTS/Frameworks"
 RESOURCES="$CONTENTS/Resources"
-APP_ICON="$ROOT_DIR/App/Packaging/Swiftchat.icon"
+APP_ICON_SOURCE="${SWIFTCHAT_APP_ICON:-Swiftchat.icon}"
+if [[ "$APP_ICON_SOURCE" = /* ]]; then
+  APP_ICON="$APP_ICON_SOURCE"
+else
+  APP_ICON="$ROOT_DIR/App/Packaging/$APP_ICON_SOURCE"
+fi
 
 if [[ "$MODE" != "package" ]]; then
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true
@@ -39,6 +44,9 @@ if [[ ! -d "$APP_ICON" ]]; then
   echo "missing app icon: $APP_ICON" >&2
   exit 1
 fi
+ICON_STAGING_DIR="$(mktemp -d "$DIST_DIR/SwiftchatIconSource.XXXXXX")"
+trap 'rm -rf "$ICON_STAGING_DIR"' EXIT
+ditto "$APP_ICON" "$ICON_STAGING_DIR/$APP_NAME.icon"
 ICON_PARTIAL_PLIST="$DIST_DIR/SwiftchatIcon-Info.plist"
 xcrun actool \
   --compile "$RESOURCES" \
@@ -47,7 +55,7 @@ xcrun actool \
   --app-icon "$APP_NAME" \
   --output-partial-info-plist "$ICON_PARTIAL_PLIST" \
   --warnings --notices --errors \
-  "$APP_ICON"
+  "$ICON_STAGING_DIR/$APP_NAME.icon"
 rm -f "$ICON_PARTIAL_PLIST"
 
 cat >"$CONTENTS/Info.plist" <<PLIST

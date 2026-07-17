@@ -30,6 +30,12 @@ Use `--verify`, `--debug`, `--logs`, or `--telemetry` for the corresponding run 
 
 Use `./script/build_and_run.sh --offline` for fully offline mock-data testing. `--demo` remains a compatibility alias for the same mode; normal launch never constructs or displays mock data.
 
+`App/Packaging/Swiftchat.icon` is the default app icon. Self-builds can opt into the bundled flower design with:
+
+```sh
+SWIFTCHAT_APP_ICON="SwiftChat Flower.icon" ./script/build_and_run.sh
+```
+
 ## Tests
 
 ```sh

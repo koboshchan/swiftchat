@@ -1,3 +1,4 @@
+import AppKit
 import SwiftchatModels
 import SwiftUI
 
@@ -55,17 +56,24 @@ private struct SwiftchatSessionLoadingView: View {
             )
 
             VStack(spacing: 14) {
-                ProgressView()
-                    .controlSize(.large)
-                    .tint(Color(hex: 0xFF79AA))
-                    .frame(width: 58, height: 58)
-                    .background(Color.white.opacity(0.055), in: Circle())
+                Image(nsImage: NSApplication.shared.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 104, height: 104)
+                    .shadow(color: Color.black.opacity(0.34), radius: 22, y: 12)
+                    .accessibilityHidden(true)
                 Text("Opening Swiftchat")
                     .font(.title2.bold())
                     .foregroundStyle(.white)
-                Text(detail)
-                    .font(.callout)
-                    .foregroundStyle(.white.opacity(0.62))
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(Color(hex: 0xFF79AA))
+                    Text(detail)
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.62))
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
