@@ -98,9 +98,15 @@ private struct ServerRailSelectionIndicator: View {
     }
 
     private var indicatorHeight: CGFloat {
-        if isSelected { return 36 }
-        if isHovering { return 20 }
-        if hasNotification { return 8 }
+        if isSelected {
+            return 36
+        }
+        if isHovering {
+            return 20
+        }
+        if hasNotification {
+            return 8
+        }
         return 0
     }
 }

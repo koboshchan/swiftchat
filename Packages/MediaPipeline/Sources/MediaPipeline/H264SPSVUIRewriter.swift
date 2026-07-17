@@ -9,11 +9,10 @@ enum H264SPSVUIRewriter {
         guard !nalUnits.isEmpty else { return frame }
         var output = Data()
         for nalUnit in nalUnits {
-            let rewritten: Data
-            if nalUnit.first.map({ $0 & 0x1F }) == 7 {
-                rewritten = rewriteSPS(nalUnit) ?? nalUnit
+            let rewritten: Data = if nalUnit.first.map({ $0 & 0x1F }) == 7 {
+                rewriteSPS(nalUnit) ?? nalUnit
             } else {
-                rewritten = nalUnit
+                nalUnit
             }
             AnnexB.append(nalUnit: rewritten, to: &output)
         }
@@ -46,7 +45,7 @@ enum H264SPSVUIRewriter {
             guard copyBits(1, from: &reader, to: &writer) else { return nil }
             guard copySE(from: &reader, to: &writer), copySE(from: &reader, to: &writer) else { return nil }
             guard let cycleCount = copyUE(from: &reader, to: &writer) else { return nil }
-            for _ in 0..<cycleCount {
+            for _ in 0 ..< cycleCount {
                 guard copySE(from: &reader, to: &writer) else { return nil }
             }
         }
@@ -57,12 +56,14 @@ enum H264SPSVUIRewriter {
         guard copyUE(from: &reader, to: &writer) != nil else { return nil } // height
         guard let frameOnly = reader.readBits(1) else { return nil }
         writer.writeBits(frameOnly, count: 1)
-        if frameOnly == 0, !copyBits(1, from: &reader, to: &writer) { return nil }
+        if frameOnly == 0, !copyBits(1, from: &reader, to: &writer) {
+            return nil
+        }
         guard copyBits(1, from: &reader, to: &writer) else { return nil } // direct_8x8_inference_flag
         guard let cropping = reader.readBits(1) else { return nil }
         writer.writeBits(cropping, count: 1)
         if cropping != 0 {
-            for _ in 0..<4 {
+            for _ in 0 ..< 4 {
                 guard copyUE(from: &reader, to: &writer) != nil else { return nil }
             }
         }
@@ -76,11 +77,11 @@ enum H264SPSVUIRewriter {
         writer.writeBits(0, count: 5) // chroma location, timing, HRD x2, pic structure
         writer.writeBits(1, count: 1) // bitstream_restriction_flag
         writer.writeBits(1, count: 1) // motion_vectors_over_pic_boundaries_flag
-        writer.writeUE(2)             // max_bytes_per_pic_denom
-        writer.writeUE(1)             // max_bits_per_mb_denom
-        writer.writeUE(16)            // log2_max_mv_length_horizontal
-        writer.writeUE(16)            // log2_max_mv_length_vertical
-        writer.writeUE(0)             // max_num_reorder_frames
+        writer.writeUE(2) // max_bytes_per_pic_denom
+        writer.writeUE(1) // max_bits_per_mb_denom
+        writer.writeUE(16) // log2_max_mv_length_horizontal
+        writer.writeUE(16) // log2_max_mv_length_vertical
+        writer.writeUE(0) // max_num_reorder_frames
         writer.writeUE(maxReferenceFrames) // max_dec_frame_buffering
         let rbsp = writer.finishRBSP()
 
@@ -112,7 +113,9 @@ enum H264SPSVUIRewriter {
         var output = Data()
         var zeroCount = 0
         for byte in data {
-            if zeroCount >= 2, byte == 0x03 { continue }
+            if zeroCount >= 2, byte == 0x03 {
+                continue
+            }
             output.append(byte)
             zeroCount = byte == 0 ? zeroCount + 1 : 0
         }
@@ -138,12 +141,14 @@ private struct BitReader {
     private let bytes: [UInt8]
     private var bitOffset = 0
 
-    init(data: Data) { bytes = Array(data) }
+    init(data: Data) {
+        bytes = Array(data)
+    }
 
     mutating func readBits(_ count: Int) -> UInt64? {
         guard count >= 0, count <= 64, bitOffset + count <= bytes.count * 8 else { return nil }
         var value: UInt64 = 0
-        for _ in 0..<count {
+        for _ in 0 ..< count {
             let byte = bytes[bitOffset / 8]
             let shift = 7 - (bitOffset % 8)
             value = (value << 1) | UInt64((byte >> shift) & 1)
@@ -156,7 +161,9 @@ private struct BitReader {
         var leadingZeros = 0
         while true {
             guard let bit = readBits(1) else { return nil }
-            if bit == 1 { break }
+            if bit == 1 {
+                break
+            }
             leadingZeros += 1
             guard leadingZeros < 63 else { return nil }
         }
@@ -193,7 +200,9 @@ private struct BitWriter {
 
     mutating func finishRBSP() -> Data {
         writeBits(1, count: 1)
-        if bitCount != 0 { writeBits(0, count: 8 - bitCount) }
+        if bitCount != 0 {
+            writeBits(0, count: 8 - bitCount)
+        }
         return Data(bytes)
     }
 }

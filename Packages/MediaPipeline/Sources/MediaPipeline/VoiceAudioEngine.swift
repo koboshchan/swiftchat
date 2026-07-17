@@ -24,12 +24,15 @@ public final class VoiceAudioEngine {
     public var inputVolume: Float = 1 {
         didSet { captureBridge.inputVolume = min(max(inputVolume, 0), 2) }
     }
+
     public var outputVolume: Float = 1 {
         didSet { applyOutputVolume() }
     }
+
     public var isMuted = false {
         didSet { captureBridge.isMuted = isMuted }
     }
+
     public var isDeafened = false {
         didSet { applyOutputVolume() }
     }
@@ -47,7 +50,7 @@ public final class VoiceAudioEngine {
     private var players: [String: AVAudioPlayerNode] = [:]
     private var participantVolumes: [String: Float] = [:]
 
-    public init(bitRate: Int = 64_000) throws {
+    public init(bitRate: Int = 64000) throws {
         let codec = try OpusCodec(bitRate: bitRate)
         self.codec = codec
         captureBridge = AudioCaptureBridge(codec: codec)
@@ -95,7 +98,7 @@ public final class VoiceAudioEngine {
         var device = MediaDeviceCatalog.audioCaptureDevice(deviceID: inputDeviceID)
         if device == nil, inputDeviceID != nil {
             voiceAudioLogger.warning("Selected input device failed; falling back to the system default")
-            self.inputDeviceID = nil
+            inputDeviceID = nil
             device = MediaDeviceCatalog.audioCaptureDevice(deviceID: nil)
         }
         guard let device else { throw VoiceAudioEngineError.inputUnavailable }
@@ -105,8 +108,12 @@ public final class VoiceAudioEngine {
 
         captureSession.beginConfiguration()
         defer { captureSession.commitConfiguration() }
-        for existing in captureSession.inputs { captureSession.removeInput(existing) }
-        for existing in captureSession.outputs { captureSession.removeOutput(existing) }
+        for existing in captureSession.inputs {
+            captureSession.removeInput(existing)
+        }
+        for existing in captureSession.outputs {
+            captureSession.removeOutput(existing)
+        }
         guard captureSession.canAddInput(input) else { throw VoiceAudioEngineError.inputUnavailable }
         captureSession.addInput(input)
         let output = AVCaptureAudioDataOutput()
@@ -116,7 +123,9 @@ public final class VoiceAudioEngine {
         captureOutput = output
         voiceAudioLogger.info("Voice capture configured without opening a shared output route")
         captureQueue.async { [captureSession] in
-            if !captureSession.isRunning { captureSession.startRunning() }
+            if !captureSession.isRunning {
+                captureSession.startRunning()
+            }
         }
     }
 
@@ -142,11 +151,17 @@ public final class VoiceAudioEngine {
         captureOutput?.setSampleBufferDelegate(nil, queue: nil)
         captureOutput = nil
         captureQueue.sync { [captureSession] in
-            if captureSession.isRunning { captureSession.stopRunning() }
+            if captureSession.isRunning {
+                captureSession.stopRunning()
+            }
         }
         captureSession.beginConfiguration()
-        for input in captureSession.inputs { captureSession.removeInput(input) }
-        for output in captureSession.outputs { captureSession.removeOutput(output) }
+        for input in captureSession.inputs {
+            captureSession.removeInput(input)
+        }
+        for output in captureSession.outputs {
+            captureSession.removeOutput(output)
+        }
         captureSession.commitConfiguration()
     }
 
@@ -195,11 +210,15 @@ public final class VoiceAudioEngine {
         let buffer = try codec.decode(opusPacket)
         let player = try player(for: userID)
         player.scheduleBuffer(buffer)
-        if !player.isPlaying { try player.playAudio() }
+        if !player.isPlaying {
+            try player.playAudio()
+        }
     }
 
     private func player(for userID: String) throws -> AVAudioPlayerNode {
-        if let player = players[userID] { return player }
+        if let player = players[userID] {
+            return player
+        }
         let player = AVAudioPlayerNode()
         player.volume = participantVolumes[userID] ?? 1
         playbackEngine.attach(player)
@@ -218,10 +237,12 @@ private final class AudioCaptureBridge: NSObject, AVCaptureAudioDataOutputSample
         get { lock.withLock { _handler } }
         set { lock.withLock { _handler = newValue } }
     }
+
     var inputVolume: Float {
         get { lock.withLock { _inputVolume } }
         set { lock.withLock { _inputVolume = newValue } }
     }
+
     var isMuted: Bool {
         get { lock.withLock { _isMuted } }
         set { lock.withLock { _isMuted = newValue } }
@@ -265,7 +286,9 @@ private final class AudioCaptureBridge: NSObject, AVCaptureAudioDataOutputSample
 
     func configure(inputFormat: AVAudioFormat) throws {
         try lock.withLock {
-            if let converter, converter.inputFormat == inputFormat { return }
+            if let converter, converter.inputFormat == inputFormat {
+                return
+            }
             guard let converter = AVAudioConverter(from: inputFormat, to: OpusCodec.pcmFormat) else {
                 throw VoiceAudioEngineError.converterUnavailable
             }
@@ -305,7 +328,7 @@ private final class AudioCaptureBridge: NSObject, AVCaptureAudioDataOutputSample
                       let outputChannels = pcm.floatChannelData else { break }
                 pcm.frameLength = OpusCodec.frameSamples
                 var energy: Float = 0
-                for index in 0..<frameCount {
+                for index in 0 ..< frameCount {
                     let leftSample = _isMuted ? 0 : left[index] * _inputVolume
                     let rightSample = _isMuted ? 0 : right[index] * _inputVolume
                     outputChannels[0][index] = leftSample
@@ -322,7 +345,9 @@ private final class AudioCaptureBridge: NSObject, AVCaptureAudioDataOutputSample
             return output
         }
         let handler = handler
-        for frame in frames { handler?(frame) }
+        for frame in frames {
+            handler?(frame)
+        }
     }
 }
 

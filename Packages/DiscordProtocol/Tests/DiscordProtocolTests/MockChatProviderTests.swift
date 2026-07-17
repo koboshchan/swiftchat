@@ -1,9 +1,9 @@
+@testable import DiscordProtocol
 import Foundation
 import SwiftchatModels
 import Testing
-@testable import DiscordProtocol
 
-@Test func mockFixtureIsSyntheticRichAndAvailableOffline() async throws {
+@Test func `mock fixture is synthetic rich and available offline`() async throws {
     let provider = MockChatProvider()
     let snapshot = try await provider.bootstrap()
 
@@ -31,7 +31,7 @@ import Testing
     }
 }
 
-@Test func mockLongServerListFixtureProvidesScrollableGuildAndEmojiRails() async throws {
+@Test func `mock long server list fixture provides scrollable guild and emoji rails`() async throws {
     let provider = MockChatProvider(includesLongServerList: true)
     let snapshot = try await provider.bootstrap()
 
@@ -43,11 +43,11 @@ import Testing
     let channels = try await provider.channels(in: lastGuild.id)
     let channel = try #require(channels.first)
     #expect(channel.name == "general")
-    #expect(!(try await provider.messages(in: channel.id, before: nil, limit: 50)).messages.isEmpty)
-    #expect((try await provider.members(in: lastGuild.id)).count == 2)
+    #expect(try await !(provider.messages(in: channel.id, before: nil, limit: 50)).messages.isEmpty)
+    #expect(try await (provider.members(in: lastGuild.id)).count == 2)
 }
 
-@Test func mockAttachmentSendCopiesTheSelectedFileIntoDemoStorage() async throws {
+@Test func `mock attachment send copies the selected file into demo storage`() async throws {
     let provider = MockChatProvider()
     _ = try await provider.bootstrap()
     let sourceDirectory = FileManager.default.temporaryDirectory

@@ -5,7 +5,7 @@ class Encryptor {
     private let encryptorHandle: DAVEEncryptorHandle
 
     init() {
-        self.encryptorHandle = daveEncryptorCreate()
+        encryptorHandle = daveEncryptorCreate()
     }
 
     deinit {
@@ -13,21 +13,21 @@ class Encryptor {
     }
 
     func setKeyRatchet(keyRatchet: KeyRatchet) {
-        daveEncryptorSetKeyRatchet(self.encryptorHandle, keyRatchet.handle)
+        daveEncryptorSetKeyRatchet(encryptorHandle, keyRatchet.handle)
     }
 
     func setPassthroughMode(enabled: Bool) {
-        daveEncryptorSetPassthroughMode(self.encryptorHandle, enabled)
+        daveEncryptorSetPassthroughMode(encryptorHandle, enabled)
     }
 
     func assign(ssrc: UInt32, codec: DaveCodec) {
-        daveEncryptorAssignSsrcToCodec(self.encryptorHandle, ssrc, codec.nativeValue)
+        daveEncryptorAssignSsrcToCodec(encryptorHandle, ssrc, codec.nativeValue)
     }
 
     func encrypt(
         ssrc: UInt32,
         data: Data,
-        mediaType: DaveMediaType = .audio,
+        mediaType: DaveMediaType = .audio
     ) throws(EncryptError) -> Data {
         let capacity = daveEncryptorGetMaxCiphertextByteSize(
             encryptorHandle,
@@ -35,7 +35,7 @@ class Encryptor {
             data.count
         )
         var encryptedData = Data(count: max(capacity, data.count))
-        var outputLength: Int = 0
+        var outputLength = 0
 
         let result = encryptedData.withUnsafeMutableBytes { encryptedData in
             data.withUnsafeBytes { data in
@@ -50,7 +50,7 @@ class Encryptor {
                     data.count,
                     encryptedData.baseAddress!,
                     encryptedData.count,
-                    &outputLength,
+                    &outputLength
                 )
             }
         }
@@ -59,7 +59,7 @@ class Encryptor {
             throw error
         }
 
-        encryptedData.removeSubrange(outputLength..<encryptedData.count)
+        encryptedData.removeSubrange(outputLength ..< encryptedData.count)
         return encryptedData
     }
 }

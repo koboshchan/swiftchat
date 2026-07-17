@@ -1,11 +1,11 @@
 import DiscordProtocol
 import Foundation
-import Testing
 @testable import Swiftchat
+import Testing
 
 @Suite(.serialized)
 struct DiscordSessionAuthenticatorTests {
-    @Test func coldPasswordLoginMatchesFingerprintLoginAndValidationContract() async throws {
+    @Test func `cold password login matches fingerprint login and validation contract`() async throws {
         AuthenticationURLProtocol.reset(mode: .passwordSuccess)
         let store = AuthenticationCredentialStore()
         let fingerprints = TestFingerprintStore()
@@ -24,7 +24,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(AuthenticationURLProtocol.paths == [
             "/api/v9/experiments",
             "/api/v9/auth/login",
-            "/api/v9/users/@me",
+            "/api/v9/users/@me"
         ])
         #expect(AuthenticationURLProtocol.loginBody?["login"] as? String == "person@example.com")
         #expect(AuthenticationURLProtocol.loginBody?["password"] as? String == "correct horse battery staple")
@@ -38,7 +38,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(await store.storedAccountID == "123456789012345678")
     }
 
-    @Test func mfaUsesIssuedTicketMethodAndLoginInstanceThenValidatesOnce() async throws {
+    @Test func `mfa uses issued ticket method and login instance then validates once`() async throws {
         AuthenticationURLProtocol.reset(mode: .mfaSuccess)
         let store = AuthenticationCredentialStore()
         let fingerprints = TestFingerprintStore(value: "existing-fingerprint")
@@ -53,7 +53,9 @@ struct DiscordSessionAuthenticatorTests {
             password: "correct horse battery staple"
         )
         let challenge = try #require({
-            if case let .mfa(challenge) = firstStep { return challenge }
+            if case let .mfa(challenge) = firstStep {
+                return challenge
+            }
             return nil
         }())
         #expect(challenge.methods == [.totp, .backup])
@@ -68,7 +70,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(AuthenticationURLProtocol.paths == [
             "/api/v9/auth/login",
             "/api/v9/auth/mfa/totp",
-            "/api/v9/users/@me",
+            "/api/v9/users/@me"
         ])
         #expect(AuthenticationURLProtocol.mfaBody?["code"] as? String == "123456")
         #expect(AuthenticationURLProtocol.mfaBody?["ticket"] as? String == "mfa-ticket")
@@ -76,7 +78,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(AuthenticationURLProtocol.mfaFingerprint == "existing-fingerprint")
     }
 
-    @Test func captchaReplaysOnceWithPaicordChallengeHeaders() async throws {
+    @Test func `captcha replays once with paicord challenge headers`() async throws {
         AuthenticationURLProtocol.reset(mode: .captchaThenSuccess)
         let authenticator = DiscordSessionAuthenticator(
             credentials: AuthenticationCredentialStore(),
@@ -89,7 +91,9 @@ struct DiscordSessionAuthenticatorTests {
             password: "correct horse battery staple"
         )
         let challenge = try #require({
-            if case let .captcha(challenge) = firstStep { return challenge }
+            if case let .captcha(challenge) = firstStep {
+                return challenge
+            }
             return nil
         }())
         #expect(AuthenticationURLProtocol.paths == ["/api/v9/auth/login"])
@@ -103,14 +107,14 @@ struct DiscordSessionAuthenticatorTests {
         #expect(AuthenticationURLProtocol.paths == [
             "/api/v9/auth/login",
             "/api/v9/auth/login",
-            "/api/v9/users/@me",
+            "/api/v9/users/@me"
         ])
         #expect(AuthenticationURLProtocol.captchaKey == "user-completed-solution")
         #expect(AuthenticationURLProtocol.captchaRQToken == "request-token")
         #expect(AuthenticationURLProtocol.captchaSessionID == "captcha-session")
     }
 
-    @Test func remoteAuthExchangesOneTicketThenValidatesAndStoresOnce() async throws {
+    @Test func `remote auth exchanges one ticket then validates and stores once`() async throws {
         AuthenticationURLProtocol.reset(mode: .remoteAuthSuccess)
         let store = AuthenticationCredentialStore()
         let authenticator = DiscordSessionAuthenticator(
@@ -121,7 +125,9 @@ struct DiscordSessionAuthenticatorTests {
 
         let exchange = try await authenticator.exchangeRemoteAuthTicket("approved-ticket")
         let encryptedToken = try #require({
-            if case let .encryptedToken(value) = exchange { return value }
+            if case let .encryptedToken(value) = exchange {
+                return value
+            }
             return nil
         }())
         #expect(encryptedToken == "encrypted-token-fixture")
@@ -130,7 +136,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(handle.accountID == "123456789012345678")
         #expect(AuthenticationURLProtocol.paths == [
             "/api/v9/users/@me/remote-auth/login",
-            "/api/v9/users/@me",
+            "/api/v9/users/@me"
         ])
         #expect(AuthenticationURLProtocol.remoteAuthBody?["ticket"] as? String == "approved-ticket")
         #expect(AuthenticationURLProtocol.remoteAuthAuthorization == nil)
@@ -139,7 +145,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(await store.storedAccountID == "123456789012345678")
     }
 
-    @Test func remoteAuthCaptchaReplaysTicketOnceWithPaicordChallengeHeaders() async throws {
+    @Test func `remote auth captcha replays ticket once with paicord challenge headers`() async throws {
         AuthenticationURLProtocol.reset(mode: .remoteAuthCaptchaThenSuccess)
         let authenticator = DiscordSessionAuthenticator(
             credentials: AuthenticationCredentialStore(),
@@ -149,7 +155,9 @@ struct DiscordSessionAuthenticatorTests {
 
         let firstExchange = try await authenticator.exchangeRemoteAuthTicket("approved-ticket")
         let challenge = try #require({
-            if case let .captcha(value) = firstExchange { return value }
+            if case let .captcha(value) = firstExchange {
+                return value
+            }
             return nil
         }())
         #expect(challenge.shouldServeInvisible == true)
@@ -163,7 +171,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(encryptedToken == "encrypted-token-fixture")
         #expect(AuthenticationURLProtocol.paths == [
             "/api/v9/users/@me/remote-auth/login",
-            "/api/v9/users/@me/remote-auth/login",
+            "/api/v9/users/@me/remote-auth/login"
         ])
         #expect(AuthenticationURLProtocol.remoteAuthRequestCount == 2)
         #expect(AuthenticationURLProtocol.remoteAuthCaptchaKey == "user-completed-remote-solution")
@@ -172,7 +180,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(AuthenticationURLProtocol.remoteAuthAuthorization == nil)
     }
 
-    @Test func remoteAuthDoesNotReplayASecondCaptchaChallenge() async throws {
+    @Test func `remote auth does not replay A second captcha challenge`() async throws {
         AuthenticationURLProtocol.reset(mode: .remoteAuthCaptchaTwice)
         let authenticator = DiscordSessionAuthenticator(
             credentials: AuthenticationCredentialStore(),
@@ -181,7 +189,9 @@ struct DiscordSessionAuthenticatorTests {
         )
         let firstExchange = try await authenticator.exchangeRemoteAuthTicket("approved-ticket")
         let challenge = try #require({
-            if case let .captcha(value) = firstExchange { return value }
+            if case let .captcha(value) = firstExchange {
+                return value
+            }
             return nil
         }())
 
@@ -195,7 +205,7 @@ struct DiscordSessionAuthenticatorTests {
         #expect(AuthenticationURLProtocol.remoteAuthRequestCount == 2)
         #expect(AuthenticationURLProtocol.paths == [
             "/api/v9/users/@me/remote-auth/login",
-            "/api/v9/users/@me/remote-auth/login",
+            "/api/v9/users/@me/remote-auth/login"
         ])
     }
 
@@ -213,8 +223,13 @@ private actor TestFingerprintStore: DiscordFingerprintStoring {
         self.value = value
     }
 
-    func load() -> String? { value }
-    func save(_ fingerprint: String) { value = fingerprint }
+    func load() -> String? {
+        value
+    }
+
+    func save(_ fingerprint: String) {
+        value = fingerprint
+    }
 }
 
 private actor AuthenticationCredentialStore: CredentialStore {
@@ -225,9 +240,14 @@ private actor AuthenticationCredentialStore: CredentialStore {
         return CredentialHandle(accountID: accountID)
     }
 
-    func credential(for handle: CredentialHandle) async throws -> Data { Data() }
+    func credential(for handle: CredentialHandle) async throws -> Data {
+        Data()
+    }
+
     func remove(_ handle: CredentialHandle) async throws {}
-    func handles() async throws -> [CredentialHandle] { [] }
+    func handles() async throws -> [CredentialHandle] {
+        []
+    }
 }
 
 private final class AuthenticationURLProtocol: URLProtocol, @unchecked Sendable {
@@ -284,8 +304,13 @@ private final class AuthenticationURLProtocol: URLProtocol, @unchecked Sendable 
         remoteAuthCaptchaSessionID = nil
     }
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
 
     override func startLoading() {
         let path = request.url!.path
@@ -339,7 +364,8 @@ private final class AuthenticationURLProtocol: URLProtocol, @unchecked Sendable 
             Self.remoteAuthCaptchaRQToken = request.value(forHTTPHeaderField: "X-Captcha-Rqtoken")
             Self.remoteAuthCaptchaSessionID = request.value(forHTTPHeaderField: "X-Captcha-Session-Id")
             if (Self.mode == .remoteAuthCaptchaThenSuccess && Self.remoteAuthRequestCount == 1)
-                || Self.mode == .remoteAuthCaptchaTwice {
+                || Self.mode == .remoteAuthCaptchaTwice
+            {
                 status = 400
                 body = #"{"captcha_key":["captcha-required"],"captcha_service":"hcaptcha","captcha_sitekey":"remote-site-key","captcha_rqdata":"remote-request-data","captcha_rqtoken":"remote-request-token","captcha_session_id":"remote-captcha-session","should_serve_invisible":true}"#
             } else {
@@ -369,7 +395,7 @@ private final class AuthenticationURLProtocol: URLProtocol, @unchecked Sendable 
             httpVersion: "HTTP/1.1",
             headerFields: [
                 "Content-Type": "application/json",
-                "X-RateLimit-Reset-After": "0",
+                "X-RateLimit-Reset-After": "0"
             ]
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
@@ -380,12 +406,14 @@ private final class AuthenticationURLProtocol: URLProtocol, @unchecked Sendable 
     override func stopLoading() {}
 
     private static func bodyData(from request: URLRequest) -> Data? {
-        if let body = request.httpBody { return body }
+        if let body = request.httpBody {
+            return body
+        }
         guard let stream = request.httpBodyStream else { return nil }
         stream.open()
         defer { stream.close() }
         var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 1_024)
+        var buffer = [UInt8](repeating: 0, count: 1024)
         while stream.hasBytesAvailable {
             let count = stream.read(&buffer, maxLength: buffer.count)
             guard count > 0 else { break }

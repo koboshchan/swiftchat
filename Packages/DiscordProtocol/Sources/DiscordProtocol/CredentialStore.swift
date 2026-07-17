@@ -3,7 +3,9 @@ import Security
 
 public struct CredentialHandle: Hashable, Sendable {
     public let accountID: String
-    public init(accountID: String) { self.accountID = accountID }
+    public init(accountID: String) {
+        self.accountID = accountID
+    }
 }
 
 public protocol CredentialStore: Sendable {
@@ -15,7 +17,9 @@ public protocol CredentialStore: Sendable {
 
 public actor KeychainCredentialStore: CredentialStore {
     private let service: String
-    public init(service: String = "dev.swiftchat.Swiftchat.session") { self.service = service }
+    public init(service: String = "dev.swiftchat.Swiftchat.session") {
+        self.service = service
+    }
 
     public func store(_ credential: Data, accountID: String) async throws -> CredentialHandle {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: accountID]
@@ -32,7 +36,7 @@ public actor KeychainCredentialStore: CredentialStore {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
             kSecAttrAccount as String: handle.accountID, kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
@@ -51,16 +55,21 @@ public actor KeychainCredentialStore: CredentialStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecReturnAttributes as String: true,
-            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecMatchLimit as String: kSecMatchLimitAll
         ]
         var items: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &items)
-        if status == errSecItemNotFound { return [] }
+        if status == errSecItemNotFound {
+            return []
+        }
         guard status == errSecSuccess else { throw KeychainError(status: status) }
-        let dictionaries: [[String: Any]]
-        if let values = items as? [[String: Any]] { dictionaries = values }
-        else if let value = items as? [String: Any] { dictionaries = [value] }
-        else { dictionaries = [] }
+        let dictionaries: [[String: Any]] = if let values = items as? [[String: Any]] {
+            values
+        } else if let value = items as? [String: Any] {
+            [value]
+        } else {
+            []
+        }
         return dictionaries.compactMap { value in
             (value[kSecAttrAccount as String] as? String).map(CredentialHandle.init(accountID:))
         }
@@ -69,5 +78,7 @@ public actor KeychainCredentialStore: CredentialStore {
 
 public struct KeychainError: LocalizedError, Sendable {
     public let status: OSStatus
-    public var errorDescription: String? { SecCopyErrorMessageString(status, nil) as String? ?? "Keychain error \(status)" }
+    public var errorDescription: String? {
+        SecCopyErrorMessageString(status, nil) as String? ?? "Keychain error \(status)"
+    }
 }

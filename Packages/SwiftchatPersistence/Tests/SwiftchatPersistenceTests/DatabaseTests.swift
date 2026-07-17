@@ -1,9 +1,9 @@
-import SwiftchatModels
 import Foundation
-import Testing
+import SwiftchatModels
 @testable import SwiftchatPersistence
+import Testing
 
-@Test func draftsAndMessagesRoundTrip() async throws {
+@Test func `drafts and messages round trip`() async throws {
     let database = try SwiftchatDatabase(inMemory: true)
     let channelID = ChannelID(rawValue: 12)
     try await database.saveDraft("hello", channelID: channelID)
@@ -15,11 +15,11 @@ import Testing
     #expect(try await database.messages(in: channelID) == [message])
 }
 
-@Test func messageHistoryReturnsTheNewestPageInChronologicalOrder() async throws {
+@Test func `message history returns the newest page in chronological order`() async throws {
     let database = try SwiftchatDatabase(inMemory: true)
     let channelID = ChannelID(rawValue: 42)
     let user = User(id: UserID(rawValue: 1), username: "user", displayName: "User")
-    let messages = (1...150).map { value in
+    let messages = (1 ... 150).map { value in
         Message(
             id: MessageID(rawValue: UInt64(value)),
             channelID: channelID,

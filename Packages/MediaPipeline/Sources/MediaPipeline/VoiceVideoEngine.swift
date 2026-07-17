@@ -17,7 +17,9 @@ public final class VoiceVideoFrame: Identifiable, Equatable, @unchecked Sendable
         self.image = image
     }
 
-    public static func == (lhs: VoiceVideoFrame, rhs: VoiceVideoFrame) -> Bool { lhs.id == rhs.id }
+    public static func == (lhs: VoiceVideoFrame, rhs: VoiceVideoFrame) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
 public enum VoiceVideoError: Error, Equatable {
@@ -33,7 +35,7 @@ public enum VoiceVideoError: Error, Equatable {
 }
 
 public final class VoiceVideoEngine: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
-    public static let width = 1_280
+    public static let width = 1280
     public static let height = 720
     public static let framerate = 30
 
@@ -85,15 +87,19 @@ public final class VoiceVideoEngine: NSObject, AVCaptureVideoDataOutputSampleBuf
             captureSession.beginConfiguration()
             do {
                 captureSession.sessionPreset = .hd1280x720
-                for existing in captureSession.inputs { captureSession.removeInput(existing) }
-                for existing in captureSession.outputs { captureSession.removeOutput(existing) }
+                for existing in captureSession.inputs {
+                    captureSession.removeInput(existing)
+                }
+                for existing in captureSession.outputs {
+                    captureSession.removeOutput(existing)
+                }
                 guard captureSession.canAddInput(input) else { throw VoiceVideoError.cameraInputUnavailable }
                 captureSession.addInput(input)
 
                 let output = AVCaptureVideoDataOutput()
                 output.alwaysDiscardsLateVideoFrames = true
                 output.videoSettings = [
-                    kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange),
+                    kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
                 ]
                 output.setSampleBufferDelegate(self, queue: captureQueue)
                 guard captureSession.canAddOutput(output) else { throw VoiceVideoError.cameraUnavailable }
@@ -185,7 +191,9 @@ final class H264VideoEncoder: @unchecked Sendable {
     }
 
     deinit {
-        if let session { VTCompressionSessionInvalidate(session) }
+        if let session {
+            VTCompressionSessionInvalidate(session)
+        }
     }
 
     func encode(pixelBuffer: CVPixelBuffer, presentationTime: CMTime) {
@@ -203,7 +211,9 @@ final class H264VideoEncoder: @unchecked Sendable {
             sourceFrameRefcon: nil,
             infoFlagsOut: nil
         )
-        if status == noErr { shouldForceKeyframe = false }
+        if status == noErr {
+            shouldForceKeyframe = false
+        }
     }
 
     func completeFrames() {
@@ -237,7 +247,7 @@ final class H264VideoEncoder: @unchecked Sendable {
         let isKeyframe = attachments?.first?[kCMSampleAttachmentKey_NotSync] as? Bool != true
         var output = Data()
         if isKeyframe, let format = CMSampleBufferGetFormatDescription(sampleBuffer) {
-            for index in 0..<2 {
+            for index in 0 ..< 2 {
                 var pointer: UnsafePointer<UInt8>?
                 var size = 0
                 var count = 0
@@ -273,12 +283,12 @@ final class H264VideoEncoder: @unchecked Sendable {
                 | Int(bytes[offset + 3])
             offset += 4
             guard naluLength > 0, offset + naluLength <= totalLength else { return nil }
-            AnnexB.append(nalUnit: bytes[offset..<(offset + naluLength)], to: &output)
+            AnnexB.append(nalUnit: bytes[offset ..< (offset + naluLength)], to: &output)
             offset += naluLength
         }
         let time = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
         let seconds = CMTimeGetSeconds(time)
-        let timestamp = seconds.isFinite ? UInt32(truncatingIfNeeded: UInt64(max(0, seconds * 90_000))) : 0
+        let timestamp = seconds.isFinite ? UInt32(truncatingIfNeeded: UInt64(max(0, seconds * 90000))) : 0
         return EncodedVideoFrame(
             data: H264SPSVUIRewriter.rewriteAnnexBFrame(output),
             rtpTimestamp: timestamp,
@@ -316,7 +326,7 @@ public final class H264VideoDecoder: @unchecked Sendable {
         decodeQueue.async { [weak self] in
             guard let self else { return }
             do {
-                try self.decode(annexBFrame: annexBFrame)
+                try decode(annexBFrame: annexBFrame)
             } catch {
                 onFailure()
             }
@@ -332,14 +342,20 @@ public final class H264VideoDecoder: @unchecked Sendable {
             guard let type = nalu.first.map({ $0 & 0x1F }) else { continue }
             switch type {
             case 7:
-                if sps != nalu { sps = nalu; parametersChanged = true }
+                if sps != nalu {
+                    sps = nalu; parametersChanged = true
+                }
             case 8:
-                if pps != nalu { pps = nalu; parametersChanged = true }
+                if pps != nalu {
+                    pps = nalu; parametersChanged = true
+                }
             default:
                 mediaNALUnits.append(nalu)
             }
         }
-        if parametersChanged || session == nil { try createSession() }
+        if parametersChanged || session == nil {
+            try createSession()
+        }
         guard let session, let formatDescription, !mediaNALUnits.isEmpty else { return }
 
         var avcc = Data()
@@ -395,14 +411,16 @@ public final class H264VideoDecoder: @unchecked Sendable {
 
     private func createSession() throws {
         guard let sps, let pps else { return }
-        if let session { VTDecompressionSessionInvalidate(session) }
+        if let session {
+            VTDecompressionSessionInvalidate(session)
+        }
         session = nil
         var description: CMFormatDescription?
         let descriptionStatus: OSStatus = sps.withUnsafeBytes { spsBytes in
             pps.withUnsafeBytes { ppsBytes in
                 let pointers = [
                     spsBytes.bindMemory(to: UInt8.self).baseAddress!,
-                    ppsBytes.bindMemory(to: UInt8.self).baseAddress!,
+                    ppsBytes.bindMemory(to: UInt8.self).baseAddress!
                 ]
                 let sizes = [sps.count, pps.count]
                 return pointers.withUnsafeBufferPointer { pointerBuffer in
@@ -425,7 +443,7 @@ public final class H264VideoDecoder: @unchecked Sendable {
         formatDescription = description
         let attributes: [CFString: Any] = [
             kCVPixelBufferPixelFormatTypeKey: Int(kCVPixelFormatType_32BGRA),
-            kCVPixelBufferMetalCompatibilityKey: true,
+            kCVPixelBufferMetalCompatibilityKey: true
         ]
         var callback = VTDecompressionOutputCallbackRecord(
             decompressionOutputCallback: H264VideoDecoder.outputCallback,

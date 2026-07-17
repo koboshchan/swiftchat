@@ -40,7 +40,7 @@ nonisolated protocol DiscordFingerprintStoring: Sendable {
 
 actor UserDefaultsDiscordFingerprintStore: DiscordFingerprintStoring {
     nonisolated static let shared = UserDefaultsDiscordFingerprintStore()
-    nonisolated private static let key = "dev.swiftchat.discord-fingerprint"
+    private nonisolated static let key = "dev.swiftchat.discord-fingerprint"
 
     func load() -> String? {
         UserDefaults.standard.string(forKey: Self.key)
@@ -78,7 +78,7 @@ actor DiscordSessionAuthenticator {
 
     func login(identifier: String, password: String) async throws -> DiscordNativeAuthenticationStep {
         let identifier = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !identifier.isEmpty, (8...72).contains(password.count) else {
+        guard !identifier.isEmpty, (8 ... 72).contains(password.count) else {
             throw AuthenticationError.invalidCredentials
         }
 
@@ -112,9 +112,15 @@ actor DiscordSessionAuthenticator {
                 throw AuthenticationError.invalidResponse
             }
             var methods: [DiscordMFAMethod] = []
-            if payload.totp == true { methods.append(.totp) }
-            if payload.backup == true { methods.append(.backup) }
-            if payload.sms == true { methods.append(.sms) }
+            if payload.totp == true {
+                methods.append(.totp)
+            }
+            if payload.backup == true {
+                methods.append(.backup)
+            }
+            if payload.sms == true {
+                methods.append(.sms)
+            }
             guard !methods.isEmpty else { throw AuthenticationError.unsupportedMFA }
             return .mfa(DiscordMFAChallenge(
                 ticket: ticket,
@@ -124,7 +130,7 @@ actor DiscordSessionAuthenticator {
         }
 
         guard let token = payload.token else { throw AuthenticationError.invalidResponse }
-        return .authenticated(try await validateAndStore(token: token, fingerprint: fingerprint))
+        return try await .authenticated(validateAndStore(token: token, fingerprint: fingerprint))
     }
 
     func completeCaptcha(
@@ -133,7 +139,8 @@ actor DiscordSessionAuthenticator {
     ) async throws -> DiscordNativeAuthenticationStep {
         guard let pending = pendingCaptchaRequest,
               pending.challengeID == challenge.id,
-              !solutionToken.isEmpty else {
+              !solutionToken.isEmpty
+        else {
             throw AuthenticationError.invalidCaptchaSolution
         }
         pendingCaptchaRequest = nil
@@ -141,8 +148,12 @@ actor DiscordSessionAuthenticator {
             try await Task.sleep(for: .seconds(pending.replayDelay))
         }
         var headers = ["X-Captcha-Key": solutionToken]
-        if let sessionID = challenge.sessionID { headers["X-Captcha-Session-Id"] = sessionID }
-        if let rqtoken = challenge.rqtoken { headers["X-Captcha-Rqtoken"] = rqtoken }
+        if let sessionID = challenge.sessionID {
+            headers["X-Captcha-Session-Id"] = sessionID
+        }
+        if let rqtoken = challenge.rqtoken {
+            headers["X-Captcha-Rqtoken"] = rqtoken
+        }
         let (data, response) = try await send(
             path: pending.path,
             method: "POST",
@@ -161,9 +172,15 @@ actor DiscordSessionAuthenticator {
                 throw AuthenticationError.invalidResponse
             }
             var methods: [DiscordMFAMethod] = []
-            if payload.totp == true { methods.append(.totp) }
-            if payload.backup == true { methods.append(.backup) }
-            if payload.sms == true { methods.append(.sms) }
+            if payload.totp == true {
+                methods.append(.totp)
+            }
+            if payload.backup == true {
+                methods.append(.backup)
+            }
+            if payload.sms == true {
+                methods.append(.sms)
+            }
             guard !methods.isEmpty else { throw AuthenticationError.unsupportedMFA }
             return .mfa(DiscordMFAChallenge(
                 ticket: ticket,
@@ -172,7 +189,7 @@ actor DiscordSessionAuthenticator {
             ))
         }
         guard let token = payload.token else { throw AuthenticationError.invalidResponse }
-        return .authenticated(try await validateAndStore(
+        return try await .authenticated(validateAndStore(
             token: token,
             fingerprint: pending.fingerprint
         ))
@@ -247,7 +264,7 @@ actor DiscordSessionAuthenticator {
             return .captcha(captcha)
         }
         try validateAuthenticationResponse(data: data, response: response)
-        return .encryptedToken(try decodeRemoteAuthEncryptedToken(data))
+        return try .encryptedToken(decodeRemoteAuthEncryptedToken(data))
     }
 
     /// Mirrors Paicord's shared CAPTCHA callback for remote-auth ticket exchange:
@@ -258,7 +275,8 @@ actor DiscordSessionAuthenticator {
     ) async throws -> String {
         guard let pending = pendingRemoteAuthCaptchaRequest,
               pending.challengeID == challenge.id,
-              !solutionToken.isEmpty else {
+              !solutionToken.isEmpty
+        else {
             throw AuthenticationError.invalidCaptchaSolution
         }
         pendingRemoteAuthCaptchaRequest = nil
@@ -266,8 +284,12 @@ actor DiscordSessionAuthenticator {
             try await Task.sleep(for: .seconds(pending.replayDelay))
         }
         var headers = ["X-Captcha-Key": solutionToken]
-        if let sessionID = challenge.sessionID { headers["X-Captcha-Session-Id"] = sessionID }
-        if let rqtoken = challenge.rqtoken { headers["X-Captcha-Rqtoken"] = rqtoken }
+        if let sessionID = challenge.sessionID {
+            headers["X-Captcha-Session-Id"] = sessionID
+        }
+        if let rqtoken = challenge.rqtoken {
+            headers["X-Captcha-Rqtoken"] = rqtoken
+        }
         let (data, response) = try await send(
             path: "/users/@me/remote-auth/login",
             method: "POST",
@@ -283,7 +305,7 @@ actor DiscordSessionAuthenticator {
     }
 
     func acceptRemoteAuthToken(_ token: String) async throws -> CredentialHandle {
-        try await validateAndStore(token: token, fingerprint: await fingerprints.load())
+        try await validateAndStore(token: token, fingerprint: fingerprints.load())
     }
 
     private func decodeRemoteAuthEncryptedToken(_ data: Data) throws -> String {
@@ -293,12 +315,15 @@ actor DiscordSessionAuthenticator {
     }
 
     private func resolvedFingerprint() async throws -> String {
-        if let stored = await fingerprints.load(), !stored.isEmpty { return stored }
+        if let stored = await fingerprints.load(), !stored.isEmpty {
+            return stored
+        }
         let (data, response) = try await send(path: "/experiments", method: "GET")
         guard response.statusCode == 200,
               let payload = try? JSONDecoder().decode(ExperimentsResponse.self, from: data),
               let fingerprint = payload.fingerprint,
-              !fingerprint.isEmpty else {
+              !fingerprint.isEmpty
+        else {
             throw AuthenticationError.fingerprintUnavailable
         }
         await fingerprints.save(fingerprint)
@@ -340,13 +365,17 @@ actor DiscordSessionAuthenticator {
         let url = URL(string: "https://discord.com/api/v\(apiVersion)\(path)")!
         let maximumRetries = 3
 
-        for attempt in retriesAlreadyPerformed...maximumRetries {
+        for attempt in retriesAlreadyPerformed ... maximumRetries {
             var request = URLRequest(url: url)
             request.httpMethod = method
             request.timeoutInterval = 20
             request.httpBody = body
-            if body != nil { request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
-            for (name, value) in additionalHeaders { request.setValue(value, forHTTPHeaderField: name) }
+            if body != nil {
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            }
+            for (name, value) in additionalHeaders {
+                request.setValue(value, forHTTPHeaderField: name)
+            }
             try DiscordClientMetadata(fingerprint: fingerprint).apply(to: &request)
             let (data, rawResponse) = try await session.data(for: request)
             guard let response = rawResponse as? HTTPURLResponse else {
@@ -355,7 +384,8 @@ actor DiscordSessionAuthenticator {
             let retryStatuses = [429, 500, 502, 504]
             if retryStatuses.contains(response.statusCode),
                attempt < maximumRetries,
-               let retryDelay = Self.paicordRetryDelay(response: response, retriesSoFar: attempt) {
+               let retryDelay = Self.paicordRetryDelay(response: response, retriesSoFar: attempt)
+            {
                 try await Task.sleep(for: .seconds(retryDelay))
                 continue
             }
@@ -365,7 +395,7 @@ actor DiscordSessionAuthenticator {
     }
 
     private func validateAuthenticationResponse(data: Data, response: HTTPURLResponse) throws {
-        guard (200..<300).contains(response.statusCode) else {
+        guard (200 ..< 300).contains(response.statusCode) else {
             let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             if object?["captcha_key"] != nil || object?["captcha_sitekey"] != nil {
                 throw AuthenticationError.captchaRequired
@@ -377,17 +407,22 @@ actor DiscordSessionAuthenticator {
             if response.statusCode == 401 || response.statusCode == 403
                 || object?["suspended_user_token"] != nil
                 || object?["required_actions"] != nil
-                || code.map({ [20_013, 40_002, 40_007].contains($0) }) == true {
+                || code.map({ [20013, 40002, 40007].contains($0) }) == true
+            {
                 throw AuthenticationError.accountRestricted
             }
-            if code == 60_008 { throw AuthenticationError.invalidMFACode }
-            if response.statusCode == 400 { throw AuthenticationError.invalidCredentials }
+            if code == 60008 {
+                throw AuthenticationError.invalidMFACode
+            }
+            if response.statusCode == 400 {
+                throw AuthenticationError.invalidCredentials
+            }
             throw AuthenticationError.transport(status: response.statusCode)
         }
     }
 
     private func captchaChallenge(data: Data, response: HTTPURLResponse) -> DiscordCaptchaChallenge? {
-        guard !(200..<300).contains(response.statusCode),
+        guard !(200 ..< 300).contains(response.statusCode),
               let payload = try? JSONDecoder().decode(CaptchaResponse.self, from: data),
               let siteKey = payload.siteKey,
               !siteKey.isEmpty else { return nil }
@@ -430,7 +465,7 @@ actor DiscordSessionAuthenticator {
     }
 }
 
-nonisolated private struct PendingCaptchaRequest: Sendable {
+private nonisolated struct PendingCaptchaRequest: Sendable {
     let challengeID: UUID
     let path: String
     let body: Data
@@ -438,19 +473,19 @@ nonisolated private struct PendingCaptchaRequest: Sendable {
     let replayDelay: TimeInterval
 }
 
-nonisolated private struct PendingRemoteAuthCaptchaRequest: Sendable {
+private nonisolated struct PendingRemoteAuthCaptchaRequest: Sendable {
     let challengeID: UUID
     let body: Data
     let replayDelay: TimeInterval
 }
 
-nonisolated private struct LoginPayload: Encodable {
+private nonisolated struct LoginPayload: Encodable {
     let login: String
     let password: String
     let undelete: Bool
 }
 
-nonisolated private struct MFAPayload: Encodable {
+private nonisolated struct MFAPayload: Encodable {
     let code: String
     let ticket: String
     let loginInstanceID: String?
@@ -461,19 +496,19 @@ nonisolated private struct MFAPayload: Encodable {
     }
 }
 
-nonisolated private struct SMSSendPayload: Encodable {
+private nonisolated struct SMSSendPayload: Encodable {
     let ticket: String
 }
 
-nonisolated private struct ExperimentsResponse: Decodable {
+private nonisolated struct ExperimentsResponse: Decodable {
     let fingerprint: String?
 }
 
-nonisolated private struct RemoteAuthTicketPayload: Encodable {
+private nonisolated struct RemoteAuthTicketPayload: Encodable {
     let ticket: String
 }
 
-nonisolated private struct RemoteAuthTicketResponse: Decodable {
+private nonisolated struct RemoteAuthTicketResponse: Decodable {
     let encryptedToken: String
 
     enum CodingKeys: String, CodingKey {
@@ -481,7 +516,7 @@ nonisolated private struct RemoteAuthTicketResponse: Decodable {
     }
 }
 
-nonisolated private struct LoginResponse: Decodable {
+private nonisolated struct LoginResponse: Decodable {
     let token: String?
     let ticket: String?
     let mfa: Bool?
@@ -496,7 +531,7 @@ nonisolated private struct LoginResponse: Decodable {
     }
 }
 
-nonisolated private struct CaptchaResponse: Decodable {
+private nonisolated struct CaptchaResponse: Decodable {
     let siteKey: String?
     let rqdata: String?
     let rqtoken: String?

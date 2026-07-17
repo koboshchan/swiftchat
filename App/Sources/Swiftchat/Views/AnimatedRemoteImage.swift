@@ -26,7 +26,7 @@ struct AnimatedRemoteImage: View {
         }
         .task(id: url) {
             imageData = nil
-            for attempt in 0..<3 {
+            for attempt in 0 ..< 3 {
                 do {
                     let data: Data
                     if url.isFileURL {
@@ -35,7 +35,7 @@ struct AnimatedRemoteImage: View {
                         let request = URLRequest(url: url, cachePolicy: .returnCacheDataElseLoad, timeoutInterval: 30)
                         let result = try await URLSession.shared.data(for: request)
                         if let response = result.1 as? HTTPURLResponse {
-                            guard 200..<300 ~= response.statusCode else {
+                            guard 200 ..< 300 ~= response.statusCode else {
                                 throw URLError(.badServerResponse)
                             }
                         }
@@ -109,7 +109,7 @@ private final class AnimatedImageCanvas: NSView {
 
         var frames: [CGImage] = []
         var frameDurations: [TimeInterval] = []
-        for index in 0..<frameCount {
+        for index in 0 ..< frameCount {
             guard let image = CGImageSourceCreateImageAtIndex(source, index, nil) else { continue }
             frames.append(image)
             frameDurations.append(Self.frameDuration(source: source, index: index))
@@ -140,12 +140,20 @@ private final class AnimatedImageCanvas: NSView {
             return 0.1
         }
         if let png = properties[kCGImagePropertyPNGDictionary] as? [CFString: Any] {
-            if let value = png[kCGImagePropertyAPNGUnclampedDelayTime] as? NSNumber { return max(0.02, value.doubleValue) }
-            if let value = png[kCGImagePropertyAPNGDelayTime] as? NSNumber { return max(0.02, value.doubleValue) }
+            if let value = png[kCGImagePropertyAPNGUnclampedDelayTime] as? NSNumber {
+                return max(0.02, value.doubleValue)
+            }
+            if let value = png[kCGImagePropertyAPNGDelayTime] as? NSNumber {
+                return max(0.02, value.doubleValue)
+            }
         }
         if let gif = properties[kCGImagePropertyGIFDictionary] as? [CFString: Any] {
-            if let value = gif[kCGImagePropertyGIFUnclampedDelayTime] as? NSNumber { return max(0.02, value.doubleValue) }
-            if let value = gif[kCGImagePropertyGIFDelayTime] as? NSNumber { return max(0.02, value.doubleValue) }
+            if let value = gif[kCGImagePropertyGIFUnclampedDelayTime] as? NSNumber {
+                return max(0.02, value.doubleValue)
+            }
+            if let value = gif[kCGImagePropertyGIFDelayTime] as? NSNumber {
+                return max(0.02, value.doubleValue)
+            }
         }
         return 0.1
     }
@@ -157,7 +165,9 @@ struct LoopingRemoteWebMedia: NSViewRepresentable {
 
     private static let mediaDataStore = WKWebsiteDataStore.nonPersistent()
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     func makeNSView(context: Context) -> PassthroughWebView {
         let configuration = WKWebViewConfiguration()
@@ -225,79 +235,79 @@ struct LoopingRemoteWebMedia: NSViewRepresentable {
             #"<img id="background" src="\#($0)" alt="">"#
         } ?? ""
         return """
-            <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-            <style>
-            html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
-            body{position:relative}
-            canvas{position:absolute;inset:0;width:100%;height:100%}
-            img{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
-            video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.001;pointer-events:none}
-            </style>
-            </head><body>\(background)<video id="animation" src="\(source)" autoplay loop muted playsinline></video><canvas id="composite"></canvas>
-            <script>
-            const canvas = document.getElementById('composite');
-            const context = canvas.getContext('2d', { alpha: true });
-            const videoCanvas = document.createElement('canvas');
-            const videoContext = videoCanvas.getContext('2d', { alpha: true, willReadFrequently: true });
-            const background = document.getElementById('background');
-            const animation = document.getElementById('animation');
-            const canReadVideoPixels = \(canReadVideoPixels ? "true" : "false");
+        <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
+        <style>
+        html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+        body{position:relative}
+        canvas{position:absolute;inset:0;width:100%;height:100%}
+        img{position:absolute;left:-9999px;width:1px;height:1px;opacity:0}
+        video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.001;pointer-events:none}
+        </style>
+        </head><body>\(background)<video id="animation" src="\(source)" autoplay loop muted playsinline></video><canvas id="composite"></canvas>
+        <script>
+        const canvas = document.getElementById('composite');
+        const context = canvas.getContext('2d', { alpha: true });
+        const videoCanvas = document.createElement('canvas');
+        const videoContext = videoCanvas.getContext('2d', { alpha: true, willReadFrequently: true });
+        const background = document.getElementById('background');
+        const animation = document.getElementById('animation');
+        const canReadVideoPixels = \(canReadVideoPixels ? "true" : "false");
 
-            function resizeCanvas() {
-              const scale = window.devicePixelRatio || 1;
-              const width = Math.max(1, Math.round(window.innerWidth * scale));
-              const height = Math.max(1, Math.round(window.innerHeight * scale));
-              if (canvas.width !== width || canvas.height !== height) {
-                canvas.width = width;
-                canvas.height = height;
-                videoCanvas.width = width;
-                videoCanvas.height = height;
+        function resizeCanvas() {
+          const scale = window.devicePixelRatio || 1;
+          const width = Math.max(1, Math.round(window.innerWidth * scale));
+          const height = Math.max(1, Math.round(window.innerHeight * scale));
+          if (canvas.width !== width || canvas.height !== height) {
+            canvas.width = width;
+            canvas.height = height;
+            videoCanvas.width = width;
+            videoCanvas.height = height;
+          }
+        }
+
+        function draw() {
+          resizeCanvas();
+          const width = canvas.width;
+          const height = canvas.height;
+          context.clearRect(0, 0, width, height);
+          context.globalCompositeOperation = 'source-over';
+          if (background && background.complete && background.naturalWidth > 0) {
+            context.drawImage(background, 0, 0, width, height);
+          }
+          if (animation.readyState >= 2) {
+            if (canReadVideoPixels) {
+              videoContext.clearRect(0, 0, width, height);
+              videoContext.drawImage(animation, 0, 0, width, height);
+              const frame = videoContext.getImageData(0, 0, width, height);
+              const pixels = frame.data;
+              for (let index = 0; index < pixels.length; index += 4) {
+                const brightness = Math.max(pixels[index], pixels[index + 1], pixels[index + 2]);
+                const keyedAlpha = Math.max(0, Math.min(1, (brightness - 3) / 30));
+                pixels[index + 3] = Math.round(pixels[index + 3] * keyedAlpha);
               }
+              videoContext.putImageData(frame, 0, 0);
+              context.drawImage(videoCanvas, 0, 0);
+            } else {
+              context.globalCompositeOperation = 'screen';
+              context.drawImage(animation, 0, 0, width, height);
             }
+          }
+          context.globalCompositeOperation = 'source-over';
+        }
 
-            function draw() {
-              resizeCanvas();
-              const width = canvas.width;
-              const height = canvas.height;
-              context.clearRect(0, 0, width, height);
-              context.globalCompositeOperation = 'source-over';
-              if (background && background.complete && background.naturalWidth > 0) {
-                context.drawImage(background, 0, 0, width, height);
-              }
-              if (animation.readyState >= 2) {
-                if (canReadVideoPixels) {
-                  videoContext.clearRect(0, 0, width, height);
-                  videoContext.drawImage(animation, 0, 0, width, height);
-                  const frame = videoContext.getImageData(0, 0, width, height);
-                  const pixels = frame.data;
-                  for (let index = 0; index < pixels.length; index += 4) {
-                    const brightness = Math.max(pixels[index], pixels[index + 1], pixels[index + 2]);
-                    const keyedAlpha = Math.max(0, Math.min(1, (brightness - 3) / 30));
-                    pixels[index + 3] = Math.round(pixels[index + 3] * keyedAlpha);
-                  }
-                  videoContext.putImageData(frame, 0, 0);
-                  context.drawImage(videoCanvas, 0, 0);
-                } else {
-                  context.globalCompositeOperation = 'screen';
-                  context.drawImage(animation, 0, 0, width, height);
-                }
-              }
-              context.globalCompositeOperation = 'source-over';
-            }
+        let lastDrawTime = 0;
+        function tick(timestamp) {
+          if (timestamp - lastDrawTime >= (1000 / 24)) {
+            draw();
+            lastDrawTime = timestamp;
+          }
+          requestAnimationFrame(tick);
+        }
 
-            let lastDrawTime = 0;
-            function tick(timestamp) {
-              if (timestamp - lastDrawTime >= (1000 / 24)) {
-                draw();
-                lastDrawTime = timestamp;
-              }
-              requestAnimationFrame(tick);
-            }
-
-            animation.play().catch(() => {});
-            requestAnimationFrame(tick);
-            </script></body></html>
-            """
+        animation.play().catch(() => {});
+        requestAnimationFrame(tick);
+        </script></body></html>
+        """
     }
 
     private func escaped(_ url: URL) -> String {
@@ -313,5 +323,7 @@ struct LoopingRemoteWebMedia: NSViewRepresentable {
 }
 
 final class PassthroughWebView: WKWebView {
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
 }

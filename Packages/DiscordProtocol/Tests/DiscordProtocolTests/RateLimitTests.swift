@@ -1,9 +1,9 @@
-import SwiftchatModels
-import Foundation
-import Testing
 @testable import DiscordProtocol
+import Foundation
+import SwiftchatModels
+import Testing
 
-@Test func retryAfterNeverTruncatesDiscordsCooldown() throws {
+@Test func `retry after never truncates discords cooldown`() throws {
     let url = try #require(URL(string: "https://discord.com/api/v9/users/@me"))
     let response = try #require(HTTPURLResponse(
         url: url,
@@ -17,7 +17,7 @@ import Testing
 
 @Suite(.serialized)
 struct ProviderRequestContractTests {
-    @Test func bootstrapRetries429AndDoesNotBurstGuildChannelRequests() async throws {
+    @Test func `bootstrap retries 429 and does not burst guild channel requests`() async throws {
         RateLimitURLProtocol.reset()
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [RateLimitURLProtocol.self]
@@ -84,7 +84,7 @@ struct ProviderRequestContractTests {
         await provider.disconnect()
     }
 
-    @Test func restrictionResponseStopsEveryFollowingAuthenticatedRequest() async throws {
+    @Test func `restriction response stops every following authenticated request`() async throws {
         RateLimitURLProtocol.reset()
         RateLimitURLProtocol.restrictMessageSend = true
         let configuration = URLSessionConfiguration.ephemeral
@@ -108,20 +108,26 @@ struct ProviderRequestContractTests {
         }
         #expect(RateLimitURLProtocol.messageRequestCount == 1)
         #expect(RateLimitURLProtocol.typingRequestCount == 0)
-        #expect(await socket.closeCodes == [1_000])
+        #expect(await socket.closeCodes == [1000])
     }
 }
 
 private actor TestCredentialStore: CredentialStore {
     private(set) var credentialReadCount = 0
 
-    func store(_ credential: Data, accountID: String) async throws -> CredentialHandle { CredentialHandle(accountID: accountID) }
+    func store(_ credential: Data, accountID: String) async throws -> CredentialHandle {
+        CredentialHandle(accountID: accountID)
+    }
+
     func credential(for handle: CredentialHandle) async throws -> Data {
         credentialReadCount += 1
         return Data("test-session-credential-value".utf8)
     }
+
     func remove(_ handle: CredentialHandle) async throws {}
-    func handles() async throws -> [CredentialHandle] { [CredentialHandle(accountID: "1")] }
+    func handles() async throws -> [CredentialHandle] {
+        [CredentialHandle(accountID: "1")]
+    }
 }
 
 private struct UnavailableGatewayTransport: GatewayTransport {
@@ -135,7 +141,9 @@ private enum RestrictionGatewayError: Error { case closed }
 private struct RestrictionGatewayTransport: GatewayTransport {
     let socket: RestrictionGatewaySocket
 
-    func connect(to url: URL, maximumMessageSize: Int) async throws -> any GatewaySocket { socket }
+    func connect(to url: URL, maximumMessageSize: Int) async throws -> any GatewaySocket {
+        socket
+    }
 }
 
 private actor RestrictionGatewaySocket: GatewaySocket {
@@ -156,12 +164,16 @@ private actor RestrictionGatewaySocket: GatewaySocket {
         receiver = nil
     }
 
-    func closeCode() async -> Int? { nil }
+    func closeCode() async -> Int? {
+        nil
+    }
 }
 
 private func eventually(_ condition: @escaping @Sendable () async -> Bool) async -> Bool {
-    for _ in 0..<500 {
-        if await condition() { return true }
+    for _ in 0 ..< 500 {
+        if await condition() {
+            return true
+        }
         try? await Task.sleep(for: .milliseconds(1))
     }
     return await condition()
@@ -202,8 +214,13 @@ private final class RateLimitURLProtocol: URLProtocol, @unchecked Sendable {
         restrictMessageSend = false
     }
 
-    override class func canInit(with request: URLRequest) -> Bool { true }
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
 
     override func startLoading() {
         let path = request.url?.path ?? ""
@@ -275,12 +292,14 @@ private final class RateLimitURLProtocol: URLProtocol, @unchecked Sendable {
     override func stopLoading() {}
 
     private static func requestBody(_ request: URLRequest) -> Data? {
-        if let data = request.httpBody { return data }
+        if let data = request.httpBody {
+            return data
+        }
         guard let stream = request.httpBodyStream else { return nil }
         stream.open()
         defer { stream.close() }
         var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4_096)
+        var buffer = [UInt8](repeating: 0, count: 4096)
         while stream.hasBytesAvailable {
             let count = stream.read(&buffer, maxLength: buffer.count)
             guard count > 0 else { break }

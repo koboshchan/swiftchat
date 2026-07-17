@@ -1,12 +1,12 @@
-import AVFAudio
 import AudioToolbox
+import AVFAudio
 import Foundation
 
 public final class OpusCodec: @unchecked Sendable {
-    public static let sampleRate: Double = 48_000
+    public static let sampleRate: Double = 48000
     public static let channels: AVAudioChannelCount = 2
     public static let frameSamples: AVAudioFrameCount = 960
-    public static let maximumPacketSize = 1_275
+    public static let maximumPacketSize = 1275
 
     public nonisolated static var pcmFormat: AVAudioFormat {
         AVAudioFormat(
@@ -22,7 +22,7 @@ public final class OpusCodec: @unchecked Sendable {
     private let decoder: AVAudioConverter
     private let lock = NSLock()
 
-    public init(bitRate: Int = 64_000) throws {
+    public init(bitRate: Int = 64000) throws {
         var description = AudioStreamBasicDescription(
             mSampleRate: Self.sampleRate,
             mFormatID: kAudioFormatOpus,
@@ -35,8 +35,9 @@ public final class OpusCodec: @unchecked Sendable {
             mReserved: 0
         )
         guard let opusFormat = AVAudioFormat(streamDescription: &description),
-        let encoder = AVAudioConverter(from: Self.pcmFormat, to: opusFormat),
-        let decoder = AVAudioConverter(from: opusFormat, to: Self.pcmFormat) else {
+              let encoder = AVAudioConverter(from: Self.pcmFormat, to: opusFormat),
+              let decoder = AVAudioConverter(from: opusFormat, to: Self.pcmFormat)
+        else {
             throw OpusCodecError.converterUnavailable
         }
         encoder.bitRate = bitRate
@@ -51,7 +52,8 @@ public final class OpusCodec: @unchecked Sendable {
 
     private func encodeLocked(_ buffer: AVAudioPCMBuffer) throws -> Data {
         guard buffer.format == Self.pcmFormat,
-              buffer.frameLength == Self.frameSamples else {
+              buffer.frameLength == Self.frameSamples
+        else {
             throw OpusCodecError.invalidPCMFrame
         }
         let output = AVAudioCompressedBuffer(
@@ -70,7 +72,9 @@ public final class OpusCodec: @unchecked Sendable {
             inputStatus.pointee = .haveData
             return buffer
         }
-        if let conversionError { throw conversionError }
+        if let conversionError {
+            throw conversionError
+        }
         guard output.byteLength > 0 else {
             throw OpusCodecError.noOutput(status: status.rawValue, bytes: output.byteLength)
         }
@@ -113,7 +117,9 @@ public final class OpusCodec: @unchecked Sendable {
             inputStatus.pointee = .haveData
             return input
         }
-        if let conversionError { throw conversionError }
+        if let conversionError {
+            throw conversionError
+        }
         guard output.frameLength > 0 else {
             throw OpusCodecError.noOutput(status: status.rawValue, bytes: output.frameLength)
         }

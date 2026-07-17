@@ -1,8 +1,8 @@
 import Foundation
-import Testing
 @testable import MediaPipeline
+import Testing
 
-@Test func voiceGatewayJSONCodecDecodesVersionEightEvents() throws {
+@Test func `voice gateway JSON codec decodes version eight events`() throws {
     let ready = try VoiceGatewayCodec.decodeJSON(Data(#"{"op":2,"d":{"ssrc":42,"ip":"127.0.0.1","port":5000,"modes":["aead_aes256_gcm_rtpsize"]},"seq":7}"#.utf8))
     #expect(ready == SequencedVoiceGatewayEvent(
         sequence: 7,
@@ -18,7 +18,7 @@ import Testing
     #expect(speaking.event == .speaking(userID: "123", ssrc: 99, flags: 1))
 }
 
-@Test func voiceGatewayBinaryCodecSeparatesSequenceOpcodeAndTransition() throws {
+@Test func `voice gateway binary codec separates sequence opcode and transition`() throws {
     var data = Data([0, 44, 29, 0, 9])
     data.append(contentsOf: [1, 2, 3])
     let event = try VoiceGatewayCodec.decodeBinary(data)
@@ -26,12 +26,12 @@ import Testing
     #expect(event.event == .daveMLSAnnounceCommit(transitionID: 9, commit: Data([1, 2, 3])))
 }
 
-@Test func daveExecuteTransitionAllowsImplicitInitialTransitionID() throws {
+@Test func `dave execute transition allows implicit initial transition ID`() throws {
     let event = try VoiceGatewayCodec.decodeJSON(Data(#"{"op":22,"d":{},"seq":12}"#.utf8))
     #expect(event.event == .daveExecuteTransition(transitionID: 0))
 }
 
-@Test func voiceGatewayIdentifyAdvertisesDAVEAndResumeAcknowledgesSequence() throws {
+@Test func `voice gateway identify advertises DAVE and resume acknowledges sequence`() throws {
     let identify = try VoiceGatewayCodec.identify(
         serverID: "10",
         userID: "20",
@@ -52,11 +52,10 @@ import Testing
     #expect(resumeData["seq_ack"] as? Int == 71)
 }
 
-
-@Test func voiceGatewayVideoCodecSupportsStreamsAndSinkWants() throws {
+@Test func `voice gateway video codec supports streams and sink wants`() throws {
     let protocolSelection = try VoiceGatewayCodec.selectProtocol(
         address: "127.0.0.1",
-        port: 50_000,
+        port: 50000,
         mode: .aes256GCMRTPSize
     )
     let selectionObject = try #require(
@@ -84,7 +83,7 @@ import Testing
     #expect(data["any"] == 50)
 }
 
-@Test func voiceGatewayVideoStateAllowsDiscordToOmitLegacyRTXFields() throws {
+@Test func `voice gateway video state allows discord to omit legacy RTX fields`() throws {
     let event = try VoiceGatewayCodec.decodeJSON(Data(#"""
     {
         "op":12,
@@ -98,7 +97,7 @@ import Testing
     }
 
     #expect(state.userID == "55")
-    #expect(state.audioSSRC == 14_662)
+    #expect(state.audioSSRC == 14662)
     #expect(state.rtxSSRC == 0)
     #expect(state.streams.isEmpty)
 }

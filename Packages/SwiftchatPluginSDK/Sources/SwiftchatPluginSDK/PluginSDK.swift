@@ -58,4 +58,3 @@ public struct PluginPermissionRequest: Codable, Hashable, Identifiable, Sendable
         self.proposedScope = proposedScope
     }
 }
-

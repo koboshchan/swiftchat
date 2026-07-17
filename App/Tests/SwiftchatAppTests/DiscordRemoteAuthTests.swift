@@ -1,18 +1,18 @@
 import AppKit
 import DiscordProtocol
 import Foundation
+@testable import Swiftchat
 import Testing
 import Vision
-@testable import Swiftchat
 
 struct DiscordRemoteAuthTests {
-    @Test func decodesPaicordRemoteAuthV2Fixtures() throws {
+    @Test func `decodes paicord remote auth V 2 fixtures`() throws {
         let hello = try JSONDecoder().decode(
             DiscordRemoteAuthPayload.self,
             from: Data(#"{"op":"hello","heartbeat_interval":41250}"#.utf8)
         )
         #expect(hello.op == .hello)
-        #expect(hello.heartbeatInterval == 41_250)
+        #expect(hello.heartbeatInterval == 41250)
 
         let pending = try JSONDecoder().decode(
             DiscordRemoteAuthPayload.self,
@@ -22,7 +22,7 @@ struct DiscordRemoteAuthTests {
         #expect(pending.fingerprint == "server-issued")
     }
 
-    @Test func createsOfficialRemoteAuthURLWithoutInventingValues() {
+    @Test func `creates official remote auth URL without inventing values`() {
         #expect(
             DiscordRemoteAuthManager.qrCodeURL(fingerprint: "server-issued")?.absoluteString
                 == "https://discord.com/ra/server-issued"
@@ -30,7 +30,7 @@ struct DiscordRemoteAuthTests {
         #expect(DiscordRemoteAuthManager.qrCodeURL(fingerprint: "") == nil)
     }
 
-    @Test func decodesScannedUserAndNonceProofEncoding() {
+    @Test func `decodes scanned user and nonce proof encoding`() {
         let user = DiscordRemoteAuthManager.decodeUser(Data("1234:0:avatar-hash:pink:user".utf8))
         #expect(user == DiscordRemoteAuthUser(
             id: "1234",
@@ -41,8 +41,8 @@ struct DiscordRemoteAuthTests {
         #expect(DiscordRemoteAuthManager.base64URL(Data([0xFB, 0xFF])) == "-_8")
     }
 
-    @Test func remoteAuthSocketUsesOnlyPaicordHeaderSet() throws {
-        var request = URLRequest(url: URL(string: "wss://remote-auth-gateway.discord.gg/?v=2")!)
+    @Test func `remote auth socket uses only paicord header set`() throws {
+        var request = try URLRequest(url: #require(URL(string: "wss://remote-auth-gateway.discord.gg/?v=2")))
         DiscordClientMetadata(
             locale: "en-US",
             acceptLanguage: "en-US"
@@ -57,7 +57,7 @@ struct DiscordRemoteAuthTests {
         #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
     }
 
-    @Test @MainActor func styledQRCodeHasNoInsetBackgroundAndStillDecodes() throws {
+    @Test @MainActor func `styled QR code has no inset background and still decodes`() throws {
         let url = try #require(URL(string: "https://discord.com/ra/sanitized-fixture"))
         let image = try #require(DiscordQRCodeRenderer.render(url: url))
         var proposedRect = CGRect(origin: .zero, size: image.size)

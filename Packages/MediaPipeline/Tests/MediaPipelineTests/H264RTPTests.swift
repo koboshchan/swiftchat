@@ -1,11 +1,11 @@
 import Foundation
-import Testing
 @testable import MediaPipeline
+import Testing
 
-@Test func h264RTPRoundTripsSingleAndFragmentedNALUnits() throws {
+@Test func `h 264 RTP round trips single and fragmented NAL units`() throws {
     var frame = Data([0, 0, 0, 1, 0x67, 1, 2, 3])
     frame.append(contentsOf: [0, 0, 1, 0x65])
-    frame.append(Data(repeating: 0xAB, count: 4_000))
+    frame.append(Data(repeating: 0xAB, count: 4000))
     let fragments = try H264RTPPacketizer.packetize(frame, maximumPayloadSize: 500)
     #expect(fragments.count > 2)
     #expect(fragments.last?.marker == true)
@@ -18,16 +18,16 @@ import Testing
                 marker: fragment.marker,
                 payloadType: 101,
                 sequence: UInt16(index),
-                timestamp: 90_000,
+                timestamp: 90000,
                 ssrc: 77
             ),
             payload: fragment.payload
         ) ?? output
     }
-    #expect(AnnexB.split(frame: try #require(output)) == AnnexB.split(frame: frame))
+    #expect(try AnnexB.split(frame: #require(output)) == AnnexB.split(frame: frame))
 }
 
-@Test func h264RTPDepacketizerRejectsOrphanedFragment() {
+@Test func `h 264 RTP depacketizer rejects orphaned fragment`() {
     var depacketizer = H264RTPDepacketizer()
     #expect(throws: H264RTPError.malformedPacket) {
         try depacketizer.append(
@@ -37,7 +37,7 @@ import Testing
     }
 }
 
-@Test func h264AggregationPacketHandlesNonZeroDataStartIndex() throws {
+@Test func `h 264 aggregation packet handles non zero data start index`() throws {
     var slicedPayload = Data([0xFF, 0xFF, 24, 0, 2, 0x67, 0x01, 0, 2, 0x65, 0x02])
     slicedPayload.removeFirst(2)
     var depacketizer = H264RTPDepacketizer()
@@ -46,7 +46,7 @@ import Testing
             marker: true,
             payloadType: 101,
             sequence: 1,
-            timestamp: 90_000,
+            timestamp: 90000,
             ssrc: 42
         ),
         payload: slicedPayload
@@ -55,7 +55,7 @@ import Testing
     #expect(frame == Data([0, 0, 0, 1, 0x67, 0x01, 0, 0, 0, 1, 0x65, 0x02]))
 }
 
-@Test func h264DepacketizerDropsEntireFrameAfterSequenceGap() throws {
+@Test func `h 264 depacketizer drops entire frame after sequence gap`() throws {
     var depacketizer = H264RTPDepacketizer()
     let first = try depacketizer.append(
         header: RTPHeader(marker: false, payloadType: 101, sequence: 10, timestamp: 1, ssrc: 1),
@@ -72,5 +72,5 @@ import Testing
 
     #expect(first == nil)
     #expect(damaged == nil)
-    #expect(AnnexB.isKeyframe(try #require(recovered)))
+    #expect(try AnnexB.isKeyframe(#require(recovered)))
 }

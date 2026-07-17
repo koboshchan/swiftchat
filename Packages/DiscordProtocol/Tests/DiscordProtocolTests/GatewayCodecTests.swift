@@ -1,15 +1,15 @@
-import SwiftchatModels
-import Foundation
-import Testing
 @testable import DiscordProtocol
+import Foundation
+import SwiftchatModels
+import Testing
 
-@Test func jsonGatewayCodecRoundTripsUnknownEvents() throws {
+@Test func `json gateway codec round trips unknown events`() throws {
     let codec = JSONGatewayCodec()
     let envelope = GatewayEnvelope(op: 0, data: .object(["future": .bool(true)]), sequence: 42, eventName: "FUTURE_EVENT")
     #expect(try codec.decode(codec.encode(envelope)) == envelope)
 }
 
-@Test func productionBaselineMatchesObservedBootstrap() {
+@Test func `production baseline matches observed bootstrap`() {
     let baseline = DiscordProductionBaseline.july2026
     #expect(baseline.apiVersion == 9)
     #expect(baseline.webBuildNumber == 579_073)
@@ -21,46 +21,46 @@ import Testing
     #expect(baseline.defaultCapabilities == 1_734_653)
 }
 
-@Test func settingsProtoPreservesDiscordGuildFolderOrder() {
+@Test func `settings proto preserves discord guild folder order`() {
     func fixed64(_ value: UInt64) -> [UInt8] {
-        (0..<8).map { UInt8(truncatingIfNeeded: value >> UInt64($0 * 8)) }
+        (0 ..< 8).map { UInt8(truncatingIfNeeded: value >> UInt64($0 * 8)) }
     }
     func folder(_ ids: [UInt64]) -> [UInt8] {
         let packed = ids.flatMap(fixed64)
-        return [0x0a, UInt8(packed.count)] + packed
+        return [0x0A, UInt8(packed.count)] + packed
     }
     let firstFolder = folder([300, 100])
     let standalone = folder([200])
-    let guildFolders = [0x0a, UInt8(firstFolder.count)] + firstFolder
-        + [0x0a, UInt8(standalone.count)] + standalone
+    let guildFolders = [0x0A, UInt8(firstFolder.count)] + firstFolder
+        + [0x0A, UInt8(standalone.count)] + standalone
     let topLevel = Data([0x72, UInt8(guildFolders.count)] + guildFolders)
 
     #expect(DiscordSettingsProto.guildOrder(from: topLevel) == [
-        GuildID(rawValue: 300), GuildID(rawValue: 100), GuildID(rawValue: 200),
+        GuildID(rawValue: 300), GuildID(rawValue: 100), GuildID(rawValue: 200)
     ])
 }
 
-@Test func settingsProtoKeepsFolderOrderWhenPositionsContainAnUnlistedGuild() {
+@Test func `settings proto keeps folder order when positions contain an unlisted guild`() {
     func fixed64(_ value: UInt64) -> [UInt8] {
-        (0..<8).map { UInt8(truncatingIfNeeded: value >> UInt64($0 * 8)) }
+        (0 ..< 8).map { UInt8(truncatingIfNeeded: value >> UInt64($0 * 8)) }
     }
     func folder(_ ids: [UInt64]) -> [UInt8] {
         let packed = ids.flatMap(fixed64)
-        return [0x0a, UInt8(packed.count)] + packed
+        return [0x0A, UInt8(packed.count)] + packed
     }
 
     let folderPayload = folder([300, 100, 200])
     let completePositions = [400, 300, 100, 200].flatMap(fixed64)
-    let guildFolders = [0x0a, UInt8(folderPayload.count)] + folderPayload
+    let guildFolders = [0x0A, UInt8(folderPayload.count)] + folderPayload
         + [0x12, UInt8(completePositions.count)] + completePositions
     let topLevel = Data([0x72, UInt8(guildFolders.count)] + guildFolders)
 
     #expect(DiscordSettingsProto.guildOrder(from: topLevel) == [
-        GuildID(rawValue: 300), GuildID(rawValue: 100), GuildID(rawValue: 200),
+        GuildID(rawValue: 300), GuildID(rawValue: 100), GuildID(rawValue: 200)
     ])
 }
 
-@Test func guildsMissingFromSettingsAppearAboveTheStoredSequence() {
+@Test func `guilds missing from settings appear above the stored sequence`() {
     let stored = Guild(id: GuildID(rawValue: 100), name: "Stored")
     let newlyCreated = Guild(id: GuildID(rawValue: 400), name: "Testing Server 2")
     let olderUnlisted = Guild(id: GuildID(rawValue: 300), name: "Older unlisted")
@@ -68,11 +68,11 @@ import Testing
     #expect(DiscordRESTProvider.applyingGuildOrder(
         [stored.id], to: [stored, olderUnlisted, newlyCreated]
     ).map(\.id) == [
-        newlyCreated.id, olderUnlisted.id, stored.id,
+        newlyCreated.id, olderUnlisted.id, stored.id
     ])
 }
 
-@Test func guildMemberSubscriptionMatchesCurrentDiscordBulkShape() throws {
+@Test func `guild member subscription matches current discord bulk shape`() throws {
     let payload = DiscordGatewayPayloadFactory.guildSubscriptions(
         guildID: GuildID(rawValue: 100),
         channelID: ChannelID(rawValue: 200)
@@ -88,7 +88,7 @@ import Testing
     #expect(channels["200"] as? [[Int]] == [[0, 99]])
 }
 
-@Test func voiceStateUpdateUsesGatewayOpcodeFourAndExplicitNullToLeave() throws {
+@Test func `voice state update uses gateway opcode four and explicit null to leave`() throws {
     let join = DiscordGatewayPayloadFactory.voiceStateUpdate(
         guildID: GuildID(rawValue: 100),
         channelID: ChannelID(rawValue: 230),
@@ -123,7 +123,7 @@ import Testing
     #expect(leaveData["channel_id"] is NSNull)
 }
 
-@Test func voiceServerMigrationWaitsForAllocationThenReconnects() throws {
+@Test func `voice server migration waits for allocation then reconnects`() throws {
     let active = VoiceConnectionInfo(
         serverID: "100",
         channelID: ChannelID(rawValue: 230),
@@ -167,7 +167,7 @@ import Testing
     #expect(VoiceServerMigrationResolver.resolve(update: otherGuild, activeConnection: active) == nil)
 }
 
-@Test func guildCreateSnapshotSeedsExistingVoiceParticipants() throws {
+@Test func `guild create snapshot seeds existing voice participants`() throws {
     let data = Data(#"""
     {
         "id":"100",
@@ -187,7 +187,7 @@ import Testing
     #expect(state.isVideoEnabled)
 }
 
-@Test func readySupplementalSeedsVoiceParticipantsUsingReadyGuildOrder() throws {
+@Test func `ready supplemental seeds voice participants using ready guild order`() {
     let data = Data(#"""
     {
         "merged_voice_states": {
@@ -208,7 +208,7 @@ import Testing
     #expect(states.first(where: { $0.userID == UserID(rawValue: 201) })?.isVideoEnabled == true)
 }
 
-@Test func readySupplementalSkipsNullGuildBatchesAndFutureVoiceStates() throws {
+@Test func `ready supplemental skips null guild batches and future voice states`() {
     let data = Data(#"""
     {
         "merged_voice_states": {
@@ -229,7 +229,7 @@ import Testing
     #expect(states.first?.channelID == ChannelID(rawValue: 302))
 }
 
-@Test func readyPayloadCanSeedEmbeddedVoiceParticipants() throws {
+@Test func `ready payload can seed embedded voice participants`() throws {
     let data = Data(#"""
     {
         "guilds": [
@@ -252,7 +252,7 @@ import Testing
     #expect(participant.channelID == ChannelID(rawValue: 300))
 }
 
-@Test func lossyListsKeepValidObjectsWhenDiscordAddsPartialVariants() throws {
+@Test func `lossy lists keep valid objects when discord adds partial variants`() throws {
     struct Item: Decodable, Equatable { var required: String }
     let data = Data(#"[{"required":"one"},{"new_shape":true},{"required":"two"}]"#.utf8)
     let decoded = try JSONDecoder().decode(LossyList<Item>.self, from: data)

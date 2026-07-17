@@ -1,7 +1,7 @@
-import SwiftchatModels
-import MessageRendering
-import AVKit
 import AppKit
+import AVKit
+import MessageRendering
+import SwiftchatModels
 import SwiftUI
 
 struct MessageRowView: View, Equatable {
@@ -41,7 +41,9 @@ struct MessageRowView: View, Equatable {
                     timestamp: message.timestamp
                 )
                 VStack(alignment: .leading, spacing: 4) {
-                    if startsGroup { MessageAuthorLine(model: model, message: message) }
+                    if startsGroup {
+                        MessageAuthorLine(model: model, message: message)
+                    }
                     MessageContent(
                         message: message,
                         isEditing: $isEditing,
@@ -245,7 +247,8 @@ private struct MessageContextMenuBridge: NSViewRepresentable {
                 ? baseConfiguration.applying(NSImage.SymbolConfiguration(paletteColors: [.systemRed]))
                 : baseConfiguration
             if let image = NSImage(systemSymbolName: systemImage, accessibilityDescription: title)?
-                .withSymbolConfiguration(configuration) {
+                .withSymbolConfiguration(configuration)
+            {
                 image.isTemplate = !isDestructive
                 item.image = image
             }
@@ -262,11 +265,25 @@ private struct MessageContextMenuBridge: NSViewRepresentable {
             return item
         }
 
-        @objc private func addReaction() { react("👍") }
-        @objc private func replyToMessage() { reply() }
-        @objc private func editMessage() { edit() }
-        @objc private func copyMessage() { copy() }
-        @objc private func deleteMessage() { delete() }
+        @objc private func addReaction() {
+            react("👍")
+        }
+
+        @objc private func replyToMessage() {
+            reply()
+        }
+
+        @objc private func editMessage() {
+            edit()
+        }
+
+        @objc private func copyMessage() {
+            copy()
+        }
+
+        @objc private func deleteMessage() {
+            delete()
+        }
     }
 }
 
@@ -276,7 +293,8 @@ private final class MessageContextMenuHitView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let event = window?.currentEvent else { return nil }
         if event.type == .rightMouseDown
-            || (event.type == .leftMouseDown && event.modifierFlags.contains(.control)) {
+            || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+        {
             return self
         }
         return nil
@@ -495,7 +513,7 @@ private struct InlineMessageEditor: View {
         VStack(alignment: .leading, spacing: 5) {
             TextField("Edit message", text: $text, axis: .vertical)
                 .textFieldStyle(.plain)
-                .lineLimit(1...12)
+                .lineLimit(1 ... 12)
                 .focused(isFocused)
                 .padding(9)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -523,7 +541,9 @@ private struct MessageAuthorLine: View {
                 Text("APP").font(.caption2.bold()).padding(.horizontal, 4).background(Color.accentColor, in: RoundedRectangle(cornerRadius: 3))
             }
             Text(message.timestamp, format: .dateTime.hour().minute()).font(.caption).foregroundStyle(.secondary)
-            if message.editedTimestamp != nil { Text("(edited)").font(.caption2).foregroundStyle(.tertiary) }
+            if message.editedTimestamp != nil {
+                Text("(edited)").font(.caption2).foregroundStyle(.tertiary)
+            }
         }
     }
 }
@@ -544,8 +564,8 @@ private struct MessageReactions: View {
                         }
                         Text(reaction.count, format: .number)
                     }
-                        .font(.caption).padding(.horizontal, 7).padding(.vertical, 3)
-                        .background(reaction.didCurrentUserReact ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12), in: Capsule())
+                    .font(.caption).padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(reaction.didCurrentUserReact ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12), in: Capsule())
                 }
                 .buttonStyle(.plain)
             }
@@ -628,7 +648,9 @@ private struct AttachmentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             AttachmentPreview(attachment: attachment, kind: previewKind)
-            if let description = attachment.description { Text(description).font(.caption).foregroundStyle(.secondary) }
+            if let description = attachment.description {
+                Text(description).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -650,10 +672,18 @@ private struct AttachmentView: View {
     }
 
     private var previewKind: AttachmentPreviewKind {
-        if isGIF { return .gif }
-        if isImage { return .image }
-        if isVideo { return .video }
-        if isAudio { return .audio }
+        if isGIF {
+            return .gif
+        }
+        if isImage {
+            return .image
+        }
+        if isVideo {
+            return .video
+        }
+        if isAudio {
+            return .audio
+        }
         return .file
     }
 }
@@ -764,7 +794,9 @@ private struct InlineAVPreview: View {
 private struct NativeAVPlayerView: NSViewRepresentable {
     let url: URL
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     func makeNSView(context: Context) -> AVPlayerView {
         let view = AVPlayerView()
@@ -810,7 +842,7 @@ private struct AnimatedGIFView: NSViewRepresentable {
         nsView.image = nil
         context.coordinator.loadTask = Task {
             guard let (data, response) = try? await URLSession.shared.data(from: url),
-                  (response as? HTTPURLResponse).map({ (200..<300).contains($0.statusCode) }) != false,
+                  (response as? HTTPURLResponse).map({ (200 ..< 300).contains($0.statusCode) }) != false,
                   !Task.isCancelled,
                   context.coordinator.loadedURL == url,
                   let image = NSImage(data: data) else { return }
@@ -824,7 +856,9 @@ private struct AnimatedGIFView: NSViewRepresentable {
         nsView.image = nil
     }
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     final class Coordinator {
         var loadedURL: URL?

@@ -31,4 +31,3 @@ struct QuickSwitcherView: View {
         return query.isEmpty ? channels : channels.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
 }
-

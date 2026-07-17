@@ -27,13 +27,16 @@ struct SwiftchatApp: App {
                 .task {
                     await model.start()
                     if launchConfiguration.opensVoiceChannel,
-                       let channel = model.visibleChannels.first(where: { $0.kind == .voice }) {
+                       let channel = model.visibleChannels.first(where: { $0.kind == .voice })
+                    {
                         model.selectedChannelID = channel.id
-                        if launchConfiguration.joinsVoiceChannel { await model.joinVoice(channel) }
+                        if launchConfiguration.joinsVoiceChannel {
+                            await model.joinVoice(channel)
+                        }
                     }
                 }
         }
-        .defaultSize(width: 1_280, height: 780)
+        .defaultSize(width: 1280, height: 780)
         .windowToolbarStyle(.unified(showsTitle: false))
         .windowBackgroundDragBehavior(.disabled)
         .commands { SwiftchatCommands() }

@@ -8,6 +8,6 @@ let package = Package(
     dependencies: [.package(path: "../SwiftchatModels")],
     targets: [
         .target(name: "MessageRendering", dependencies: ["SwiftchatModels"]),
-        .testTarget(name: "MessageRenderingTests", dependencies: ["MessageRendering"]),
+        .testTarget(name: "MessageRenderingTests", dependencies: ["MessageRendering"])
     ]
 )

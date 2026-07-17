@@ -15,7 +15,7 @@ public actor MockChatProvider: ChatProvider {
     public init(includesLongServerList: Bool = false) {
         let fixture = MockChatFixture.make(includesLongServerList: includesLongServerList)
         currentUser = fixture.currentUser
-        nextMessageID = UInt64(ClientNonce.make()) ?? 9_000
+        nextMessageID = UInt64(ClientNonce.make()) ?? 9000
         snapshot = fixture.snapshot
         membersByGuild = fixture.membersByGuild
         messagesByChannel = fixture.messagesByChannel
@@ -49,7 +49,9 @@ public actor MockChatProvider: ChatProvider {
         return profile
     }
 
-    public func currentStatus() async -> PresenceStatus { .online }
+    public func currentStatus() async -> PresenceStatus {
+        .online
+    }
 
     public func updateStatus(_ status: PresenceStatus) async throws {
         for guildID in Array(membersByGuild.keys) {
@@ -71,7 +73,9 @@ public actor MockChatProvider: ChatProvider {
     public func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
         guard snapshot.channels.contains(where: { $0.id == channelID }) else { throw ChatProviderError.channelNotFound }
         var messages = messagesByChannel[channelID] ?? []
-        if let before { messages = messages.filter { $0.id < before } }
+        if let before {
+            messages = messages.filter { $0.id < before }
+        }
         let page = Array(messages.suffix(max(1, limit)))
         return MessagePage(messages: page, hasMoreBefore: messages.count > page.count)
     }
@@ -154,7 +158,9 @@ public actor MockChatProvider: ChatProvider {
             let active = message.reactions[reactionIndex].didCurrentUserReact
             message.reactions[reactionIndex].didCurrentUserReact.toggle()
             message.reactions[reactionIndex].count += active ? -1 : 1
-            if message.reactions[reactionIndex].count == 0 { message.reactions.remove(at: reactionIndex) }
+            if message.reactions[reactionIndex].count == 0 {
+                message.reactions.remove(at: reactionIndex)
+            }
         } else {
             message.reactions.append(Reaction(emoji: emoji, count: 1, didCurrentUserReact: true))
         }

@@ -18,7 +18,9 @@ struct RTPReorderBuffer: Sendable {
     }
 
     mutating func insert(_ packet: RTPBufferedPacket) -> [RTPBufferedPacket] {
-        if expectedSequence == nil { expectedSequence = packet.header.sequence }
+        if expectedSequence == nil {
+            expectedSequence = packet.header.sequence
+        }
         guard let expectedSequence else { return [] }
         let distance = packet.header.sequence &- expectedSequence
         if missingSequences.remove(packet.header.sequence) != nil {
@@ -26,7 +28,7 @@ struct RTPReorderBuffer: Sendable {
         }
         guard distance <= UInt16.max / 2 else { return [] }
         if distance > 0, distance <= 128 {
-            for step in 0..<distance {
+            for step in 0 ..< distance {
                 let missing = expectedSequence &+ step
                 if packets[missing] == nil, missingSequences.insert(missing).inserted {
                     newlyMissingSequences.append(missing)

@@ -120,7 +120,9 @@ struct VoiceChannelView: View {
                 )
             }
             .sorted {
-                if $0.isLocal != $1.isLocal { return $0.isLocal }
+                if $0.isLocal != $1.isLocal {
+                    return $0.isLocal
+                }
                 return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
             }
     }
@@ -141,8 +143,8 @@ private struct VoiceChannelPreviewGrid: View {
 
     private var columns: [GridItem] {
         let count = switch participants.count {
-        case 0...1: 1
-        case 2...4: 2
+        case 0 ... 1: 1
+        case 2 ... 4: 2
         default: 3
         }
         return Array(repeating: GridItem(.flexible(), spacing: 12), count: count)
@@ -156,7 +158,7 @@ private struct VoiceChannelPreviewGrid: View {
                 }
             }
             .padding(14)
-            .frame(maxWidth: 1_020)
+            .frame(maxWidth: 1020)
         }
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

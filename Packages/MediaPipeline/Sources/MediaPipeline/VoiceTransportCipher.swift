@@ -1,5 +1,5 @@
-import CryptoKit
 import Clibsodium
+import CryptoKit
 import Foundation
 import Sodium
 
@@ -8,8 +8,12 @@ public enum VoiceTransportMode: String, CaseIterable, Sendable {
     case xChaCha20Poly1305RTPSize = "aead_xchacha20_poly1305_rtpsize"
 
     public static func preferred(from modes: [String]) -> VoiceTransportMode? {
-        if modes.contains(aes256GCMRTPSize.rawValue) { return .aes256GCMRTPSize }
-        if modes.contains(xChaCha20Poly1305RTPSize.rawValue) { return .xChaCha20Poly1305RTPSize }
+        if modes.contains(aes256GCMRTPSize.rawValue) {
+            return .aes256GCMRTPSize
+        }
+        if modes.contains(xChaCha20Poly1305RTPSize.rawValue) {
+            return .xChaCha20Poly1305RTPSize
+        }
         return nil
     }
 }
@@ -42,7 +46,7 @@ public struct VoiceTransportCipher: Sendable {
             let sealed = try AES.GCM.seal(
                 plaintext,
                 using: SymmetricKey(data: key),
-                nonce: try AES.GCM.Nonce(data: nonce),
+                nonce: AES.GCM.Nonce(data: nonce),
                 authenticating: header
             )
             authenticatedCiphertext = sealed.ciphertext + sealed.tag
@@ -80,7 +84,8 @@ public struct VoiceTransportCipher: Sendable {
         if parsed.header.padding {
             guard let paddingLength = mediaPayload.last.map(Int.init),
                   paddingLength > 0,
-                  paddingLength <= mediaPayload.count else {
+                  paddingLength <= mediaPayload.count
+            else {
                 throw VoiceTransportCipherError.malformedPacket
             }
             mediaPayload.removeLast(paddingLength)
@@ -92,13 +97,13 @@ public struct VoiceTransportCipher: Sendable {
         guard let header = RTCPHeader.parse(from: packet), packet.count >= 28 else {
             throw VoiceTransportCipherError.malformedPacket
         }
-        return (header, try openPayload(packet: packet, headerSize: 8))
+        return try (header, openPayload(packet: packet, headerSize: 8))
     }
 
     private func openPayload(packet: Data, headerSize: Int) throws -> Data {
         let headerData = packet.prefix(headerSize)
         let suffix = Data(packet.suffix(4))
-        let authenticatedCiphertext = Data(packet[headerSize..<(packet.count - 4)])
+        let authenticatedCiphertext = Data(packet[headerSize ..< (packet.count - 4)])
         let nonce = nonceBytes(suffix: suffix)
         let plaintext: Data
         switch mode {
@@ -149,5 +154,7 @@ private extension UInt32 {
 }
 
 private extension Data {
-    var bytes: [UInt8] { Array(self) }
+    var bytes: [UInt8] {
+        Array(self)
+    }
 }

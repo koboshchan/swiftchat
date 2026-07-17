@@ -28,7 +28,7 @@ struct RTCPHeader: Equatable, Sendable {
 
     static func looksLikeRTCP(_ packet: Data) -> Bool {
         guard packet.count >= 8, packet[0] >> 6 == 2 else { return false }
-        return (200...206).contains(packet[1])
+        return (200 ... 206).contains(packet[1])
     }
 }
 
@@ -68,7 +68,7 @@ struct RTCPGenericNACK: Equatable, Sendable {
             guard let packetID = payload.readUInt16BigEndian(at: offset),
                   let bitmask = payload.readUInt16BigEndian(at: offset + 2) else { return nil }
             lost.append(packetID)
-            for bit in 0..<16 where bitmask & (UInt16(1) << UInt16(bit)) != 0 {
+            for bit in 0 ..< 16 where bitmask & (UInt16(1) << UInt16(bit)) != 0 {
                 lost.append(packetID &+ UInt16(bit + 1))
             }
             offset += 4
@@ -153,7 +153,9 @@ struct RTPRetransmissionCache: Sendable {
     }
 
     mutating func insert(_ packet: RTPRetransmissionPacket) {
-        if packets[packet.sequence] == nil { order.append(packet.sequence) }
+        if packets[packet.sequence] == nil {
+            order.append(packet.sequence)
+        }
         packets[packet.sequence] = packet
         while order.count > capacity {
             packets[order.removeFirst()] = nil

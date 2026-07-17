@@ -5,12 +5,15 @@ on:
   pull_request:
 
 jobs:
-  test:
-    runs-on: macos-latest
+  build:
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
       - name: Toolchain
-        run: swift --version
-      - name: Test
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          xcrun --sdk macosx --show-sdk-version
+      - name: Build
         run: ./script/ci.sh
-

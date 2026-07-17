@@ -92,8 +92,13 @@ struct MemberProfilePopover: View {
         return hasActiveNitro ? profile.themeHexes : []
     }
 
-    private var surfaceInset: CGFloat { 3 }
-    private var innerCornerRadius: CGFloat { 16 }
+    private var surfaceInset: CGFloat {
+        3
+    }
+
+    private var innerCornerRadius: CGFloat {
+        16
+    }
 }
 
 private struct ProfileContentHeightKey: PreferenceKey {
@@ -389,8 +394,13 @@ private struct ProfileBadgeIcon: View {
         }
     }
 
-    private var normalizedBadgeID: String { badge.id.lowercased() }
-    private var normalizedDescription: String { badge.description.lowercased() }
+    private var normalizedBadgeID: String {
+        badge.id.lowercased()
+    }
+
+    private var normalizedDescription: String {
+        badge.description.lowercased()
+    }
 
     private var isNitroBadge: Bool {
         normalizedBadgeID == "nitro"
@@ -424,7 +434,8 @@ private struct ProfileBadgeIcon: View {
         if isLegacyUsernameBadge,
            let legacyUsername,
            !legacyUsername.isEmpty,
-           !description.localizedCaseInsensitiveContains(legacyUsername) {
+           !description.localizedCaseInsensitiveContains(legacyUsername)
+        {
             lines.append("Originally known as \(legacyUsername)")
         }
         return lines.joined(separator: "\n")
@@ -478,7 +489,9 @@ private struct ProfileMutualSummary: View {
 
     private enum MutualList: String, Identifiable {
         case servers, friends
-        var id: String { rawValue }
+        var id: String {
+            rawValue
+        }
     }
 }
 
@@ -490,7 +503,7 @@ private struct ProfileAboutSection: View {
             ProfileRichTextView(source: bio)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        }
     }
 }
 
@@ -583,8 +596,11 @@ private struct RoleExpansionButton: View {
     var body: some View {
         Button(action: action) {
             Group {
-                if let label { Text(label) }
-                else if let systemImage { Image(systemName: systemImage) }
+                if let label {
+                    Text(label)
+                } else if let systemImage {
+                    Image(systemName: systemImage)
+                }
             }
             .font(.callout.weight(.medium))
             .frame(minWidth: 18, minHeight: 18)
@@ -604,7 +620,10 @@ private struct RoleExpansionButton: View {
 }
 
 struct ProfileRoleItem: Identifiable {
-    var id: RoleID { role.id }
+    var id: RoleID {
+        role.id
+    }
+
     let role: GuildRole
     let name: String
 }
@@ -678,20 +697,20 @@ private struct ProfileMutualGuildsList: View {
             ProfileMutualListHeader(title: "Mutual Servers", count: guilds.count)
             Divider()
             ScrollView {
-            VStack(spacing: 9) {
-                ForEach(guilds) { guild in
-                    HStack(spacing: 10) {
-                        AvatarView(name: guild.name, url: guild.iconURL, size: 30)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(guild.name).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            if let nickname = guild.nickname, !nickname.isEmpty {
-                                Text(nickname).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                VStack(spacing: 9) {
+                    ForEach(guilds) { guild in
+                        HStack(spacing: 10) {
+                            AvatarView(name: guild.name, url: guild.iconURL, size: 30)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(guild.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                if let nickname = guild.nickname, !nickname.isEmpty {
+                                    Text(nickname).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
                             }
+                            Spacer()
                         }
-                        Spacer()
                     }
                 }
-            }
                 .padding(14)
             }
         }
@@ -709,21 +728,21 @@ private struct ProfileMutualFriendsList: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 9) {
-                ForEach(friends) { friend in
-                    HStack(spacing: 10) {
-                        AvatarView(name: friend.displayName, url: friend.avatarURL, size: 28)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(friend.displayName).font(.subheadline.weight(.semibold)).lineLimit(1)
-                            Text(friend.username).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    ForEach(friends) { friend in
+                        HStack(spacing: 10) {
+                            AvatarView(name: friend.displayName, url: friend.avatarURL, size: 28)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(friend.displayName).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                Text(friend.username).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
                         }
-                        Spacer()
                     }
-                }
-                if totalCount > friends.count {
-                    Text("Discord returned \(friends.count) of \(totalCount) mutual friends.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                    if totalCount > friends.count {
+                        Text("Discord returned \(friends.count) of \(totalCount) mutual friends.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .padding(14)
             }
@@ -852,7 +871,7 @@ private enum ConnectionBrand {
         var components = URLComponents(string: "https://www.google.com/s2/favicons")
         components?.queryItems = [
             URLQueryItem(name: "domain", value: domain),
-            URLQueryItem(name: "sz", value: "128"),
+            URLQueryItem(name: "sz", value: "128")
         ]
         return components?.url
     }
@@ -955,13 +974,19 @@ private struct ProfileGuildIdentity: View {
 
 private enum ProfilePalette {
     static func colors(themeHexes: [UInt32], accentHex: UInt32?) -> [Color] {
-        if themeHexes.count >= 2 { return themeHexes.prefix(2).map(Color.init(hex:)) }
-        if let accentHex { return [Color(hex: accentHex).opacity(0.72), Color(hex: accentHex).opacity(0.32)] }
+        if themeHexes.count >= 2 {
+            return themeHexes.prefix(2).map(Color.init(hex:))
+        }
+        if let accentHex {
+            return [Color(hex: accentHex).opacity(0.72), Color(hex: accentHex).opacity(0.32)]
+        }
         return [Color(hex: 0x202225), Color(hex: 0x2B2D31)]
     }
 
     static func banner(themeHexes: [UInt32], accentHex: UInt32?) -> [Color] {
-        if let accentHex { return [Color(hex: accentHex), Color(hex: accentHex).opacity(0.6)] }
+        if let accentHex {
+            return [Color(hex: accentHex), Color(hex: accentHex).opacity(0.6)]
+        }
         return colors(themeHexes: themeHexes, accentHex: accentHex).reversed()
     }
 

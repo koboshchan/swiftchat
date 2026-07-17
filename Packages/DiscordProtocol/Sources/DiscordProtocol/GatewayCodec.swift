@@ -5,12 +5,19 @@ public enum JSONValue: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if container.decodeNil() { self = .null }
-        else if let value = try? container.decode(Bool.self) { self = .bool(value) }
-        else if let value = try? container.decode(Double.self) { self = .number(value) }
-        else if let value = try? container.decode(String.self) { self = .string(value) }
-        else if let value = try? container.decode([String: JSONValue].self) { self = .object(value) }
-        else { self = .array(try container.decode([JSONValue].self)) }
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([String: JSONValue].self) {
+            self = .object(value)
+        } else {
+            self = try .array(container.decode([JSONValue].self))
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -49,7 +56,11 @@ public protocol GatewayCodec: Sendable {
 
 public struct JSONGatewayCodec: GatewayCodec {
     public init() {}
-    public func encode(_ envelope: GatewayEnvelope) throws -> Data { try JSONEncoder().encode(envelope) }
-    public func decode(_ data: Data) throws -> GatewayEnvelope { try JSONDecoder().decode(GatewayEnvelope.self, from: data) }
-}
+    public func encode(_ envelope: GatewayEnvelope) throws -> Data {
+        try JSONEncoder().encode(envelope)
+    }
 
+    public func decode(_ data: Data) throws -> GatewayEnvelope {
+        try JSONDecoder().decode(GatewayEnvelope.self, from: data)
+    }
+}

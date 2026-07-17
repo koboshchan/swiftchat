@@ -7,7 +7,9 @@ public enum DiscordMarkdown {
         var output = AttributedString()
 
         for (index, rawLine) in lines.enumerated() {
-            if index > 0 { output.append(AttributedString("\n")) }
+            if index > 0 {
+                output.append(AttributedString("\n"))
+            }
             let (text, headingLevel) = heading(in: String(rawLine))
             var line = (try? AttributedString(
                 markdown: text,
@@ -31,9 +33,15 @@ public enum DiscordMarkdown {
     }
 
     private static func heading(in line: String) -> (String, Int?) {
-        if line.hasPrefix("### ") { return (String(line.dropFirst(4)), 3) }
-        if line.hasPrefix("## ") { return (String(line.dropFirst(3)), 2) }
-        if line.hasPrefix("# ") { return (String(line.dropFirst(2)), 1) }
+        if line.hasPrefix("### ") {
+            return (String(line.dropFirst(4)), 3)
+        }
+        if line.hasPrefix("## ") {
+            return (String(line.dropFirst(3)), 2)
+        }
+        if line.hasPrefix("# ") {
+            return (String(line.dropFirst(2)), 1)
+        }
         return (line, nil)
     }
 

@@ -1,6 +1,6 @@
+import Foundation
 import Observation
 import SwiftchatModels
-import Foundation
 
 @MainActor
 @Observable
@@ -30,7 +30,7 @@ final class TypingStateModel {
         let generation = (entries[key]?.generation ?? 0) &+ 1
         entries[key] = Entry(user: user, generation: generation)
         expiryTasks[key]?.cancel()
-        let expiry = self.expiry
+        let expiry = expiry
         expiryTasks[key] = Task { [weak self] in
             do { try await Task.sleep(for: expiry) }
             catch { return }
@@ -58,7 +58,9 @@ final class TypingStateModel {
 
     func clearAll() {
         guard !entries.isEmpty || !expiryTasks.isEmpty else { return }
-        for task in expiryTasks.values { task.cancel() }
+        for task in expiryTasks.values {
+            task.cancel()
+        }
         expiryTasks.removeAll()
         entries.removeAll()
         revision &+= 1
@@ -86,15 +88,15 @@ final class TypingStateModel {
         }
     }
 
-#if DEBUG
-    func expiryGenerationForTesting(channelID: ChannelID, userID: UserID) -> UInt64? {
-        entries[Key(channelID: channelID, userID: userID)]?.generation
-    }
+    #if DEBUG
+        func expiryGenerationForTesting(channelID: ChannelID, userID: UserID) -> UInt64? {
+            entries[Key(channelID: channelID, userID: userID)]?.generation
+        }
 
-    func applyExpiryForTesting(channelID: ChannelID, userID: UserID, generation: UInt64) {
-        expire(Key(channelID: channelID, userID: userID), generation: generation)
-    }
-#endif
+        func applyExpiryForTesting(channelID: ChannelID, userID: UserID, generation: UInt64) {
+            expire(Key(channelID: channelID, userID: userID), generation: generation)
+        }
+    #endif
 
     private func expire(_ key: Key, generation: UInt64) {
         guard entries[key]?.generation == generation else { return }

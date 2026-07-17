@@ -10,7 +10,7 @@ struct EditMessageView: View {
     init(message: Message, save: @escaping (String) -> Void) {
         self.message = message
         self.save = save
-        self.content = message.content
+        content = message.content
     }
 
     var body: some View {
@@ -26,4 +26,3 @@ struct EditMessageView: View {
         .padding(20).frame(width: 480)
     }
 }
-

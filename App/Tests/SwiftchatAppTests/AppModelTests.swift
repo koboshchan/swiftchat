@@ -1,12 +1,12 @@
-import Testing
 import DiscordProtocol
-import SwiftchatModels
 import Foundation
 @testable import Swiftchat
+import SwiftchatModels
+import Testing
 
 @MainActor
-@Test func nativeEmojiCatalogLoadsEveryFullyQualifiedUnicode17Emoji() {
-    #expect(NativeEmojiCatalogDiagnostics.sourceEntryCount == 3_944)
+@Test func `native emoji catalog loads every fully qualified unicode 17 emoji`() {
+    #expect(NativeEmojiCatalogDiagnostics.sourceEntryCount == 3944)
     #expect(NativeEmojiCatalogDiagnostics.itemCount < NativeEmojiCatalogDiagnostics.sourceEntryCount)
     #expect(NativeEmojiCatalogDiagnostics.skinToneCapableItemCount > 100)
     #expect(NativeEmojiCatalogDiagnostics.wavingHandValues == ["👋", "👋🏻", "👋🏼", "👋🏽", "👋🏾", "👋🏿"])
@@ -17,8 +17,8 @@ import Foundation
     #expect(NativeEmojiCatalogDiagnostics.shortcode(for: "🤍") == ":white_heart:")
     // Tone variants share their base emoji's aliases, so the collapsed picker catalog is smaller
     // than Emojibase's 3,808 keyed source records.
-    #expect(NativeEmojiCatalogDiagnostics.emojiCountWithDiscordShortcodes == 1_884)
-    #expect(NativeEmojiCatalogDiagnostics.discordShortcodeAliasCount == 2_551)
+    #expect(NativeEmojiCatalogDiagnostics.emojiCountWithDiscordShortcodes == 1884)
+    #expect(NativeEmojiCatalogDiagnostics.discordShortcodeAliasCount == 2551)
     #expect(NativeEmojiCatalogDiagnostics.shortcodes(for: "🎉") == ["tada", "party_popper"])
     #expect(NativeEmojiCatalogDiagnostics.shortcode(for: "🎉") == ":tada:")
     #expect(NativeEmojiCatalogDiagnostics.searchMatches(value: "🎉", query: ":party_popper:"))
@@ -27,7 +27,7 @@ import Foundation
 }
 
 @MainActor
-@Test func emojiPickerUsesOneContinuousRecycledDocument() {
+@Test func `emoji picker uses one continuous recycled document`() {
     #expect(EmojiPickerPerformanceDiagnostics.itemsPerRecycledRow == 9)
     #expect(EmojiPickerPerformanceDiagnostics.nativeSectionIDs.count == 9)
     #expect(Set(EmojiPickerPerformanceDiagnostics.nativeSectionIDs).count == 9)
@@ -48,11 +48,11 @@ import Foundation
     ))
 }
 
-@Test func emojiPickerKeyboardNavigationWrapsRowsAndClampsColumns() {
+@Test func `emoji picker keyboard navigation wraps rows and clamps columns`() {
     let rows = [
         ["a", "b", "c"],
         ["d", "e", "f"],
-        ["g"],
+        ["g"]
     ]
 
     #expect(EmojiPickerGridNavigation.destinationID(
@@ -78,7 +78,7 @@ import Foundation
     ) == "d")
 }
 
-@Test func emojiPickerOnlyStaysOpenForExplicitPersistentShiftSelection() {
+@Test func `emoji picker only stays open for explicit persistent shift selection`() {
     #expect(EmojiPickerActivationPolicy.keepsPickerPresented(
         allowsPersistentSelection: true,
         shiftPressed: true
@@ -93,7 +93,7 @@ import Foundation
     ))
 }
 
-@Test func messageActionsRemainVisibleWhileTheirReactionPickerIsPresented() {
+@Test func `message actions remain visible while their reaction picker is presented`() {
     #expect(MessageActionVisibilityPolicy.isVisible(
         isRowHovered: true,
         isReactionPickerPresented: false,
@@ -116,7 +116,7 @@ import Foundation
     ))
 }
 
-@Test func emojiPickerOnlyAsksTheScrollViewToRevealChangedRows() {
+@Test func `emoji picker only asks the scroll view to reveal changed rows`() {
     #expect(!EmojiPickerScrollPolicy.shouldReveal(
         previousRowID: "row:4",
         destinationRowID: "row:4"
@@ -132,7 +132,7 @@ import Foundation
 }
 
 @MainActor
-@Test func appModelLoadsDemoAndSendsMessage() async {
+@Test func `app model loads demo and sends message`() async {
     let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     #expect(model.snapshot != nil)
@@ -144,7 +144,7 @@ import Foundation
     #expect(model.messages.last?.content == "hello from test")
 }
 
-@Test func demoAndOfflineFlagsSelectTheSameTestingMode() {
+@Test func `demo and offline flags select the same testing mode`() {
     #expect(AppLaunchConfiguration(arguments: ["Swiftchat"]).mode == .normal)
     #expect(AppLaunchConfiguration(arguments: ["Swiftchat", "--offline"]).mode == .offlineTesting)
     #expect(AppLaunchConfiguration(arguments: ["Swiftchat", "--demo"]).mode == .offlineTesting)
@@ -153,7 +153,7 @@ import Foundation
 }
 
 @MainActor
-@Test func networkDisabledNormalLaunchStopsSignedOutWithoutMockData() async {
+@Test func `network disabled normal launch stops signed out without mock data`() async {
     let model = AppModel(launchMode: .normal, discordNetworkDisabledOverride: true)
     #expect(model.sessionState == .restoring)
     await model.start()
@@ -165,7 +165,7 @@ import Foundation
 }
 
 @MainActor
-@Test func interactiveSignInKeepsLoginPresentationAliveUntilBootstrapFinishes() async {
+@Test func `interactive sign in keeps login presentation alive until bootstrap finishes`() async {
     let provider = SuspendedBootstrapTestProvider()
     let model = AppModel(
         launchMode: .normal,
@@ -195,7 +195,7 @@ import Foundation
 }
 
 @MainActor
-@Test func interactiveSignInFailureStaysSignedOutAndExposesBootstrapError() async {
+@Test func `interactive sign in failure stays signed out and exposes bootstrap error`() async {
     let provider = SuspendedBootstrapTestProvider(bootstrapError: "fixture bootstrap stopped")
     let model = AppModel(
         launchMode: .normal,
@@ -215,13 +215,13 @@ import Foundation
     #expect(model.sessionState == .signedOut)
 
     await provider.releaseBootstrap()
-    #expect(!(await connection.value))
+    #expect(await !(connection.value))
     #expect(model.sessionState == .signedOut)
     #expect(model.errorMessage == "fixture bootstrap stopped")
 }
 
 @MainActor
-@Test func replyingTargetsTheSelectedMessageAndClearsAfterSending() async throws {
+@Test func `replying targets the selected message and clears after sending`() async throws {
     let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     let target = try #require(model.messages.first)
@@ -239,7 +239,7 @@ import Foundation
 }
 
 @MainActor
-@Test func messageGroupingMatchesDiscordContinuationRules() {
+@Test func `message grouping matches discord continuation rules`() {
     let author = User(id: UserID(rawValue: 1), username: "one", displayName: "One")
     let other = User(id: UserID(rawValue: 2), username: "two", displayName: "Two")
     let channel = ChannelID(rawValue: 10)
@@ -249,15 +249,15 @@ import Foundation
         Message(id: MessageID(rawValue: 2), channelID: channel, author: author, content: "six minutes", timestamp: base.addingTimeInterval(6 * 60)),
         Message(id: MessageID(rawValue: 3), channelID: channel, author: author, content: "seven minutes", timestamp: base.addingTimeInterval(13 * 60)),
         Message(id: MessageID(rawValue: 4), channelID: channel, author: other, content: "other author", timestamp: base.addingTimeInterval(13 * 60 + 1)),
-        Message(id: MessageID(rawValue: 5), channelID: channel, author: other, content: "reply", timestamp: base.addingTimeInterval(13 * 60 + 2), replyTo: MessageID(rawValue: 1)),
+        Message(id: MessageID(rawValue: 5), channelID: channel, author: other, content: "reply", timestamp: base.addingTimeInterval(13 * 60 + 2), replyTo: MessageID(rawValue: 1))
     ]
 
     let rows = MessageGrouping.rows(for: messages)
-    #expect(rows.map { $0.startsGroup } == [true, false, true, true, true])
+    #expect(rows.map(\.startsGroup) == [true, false, true, true, true])
 }
 
 @MainActor
-@Test func memberSectionsUseHoistedRolesAndSortMembers() {
+@Test func `member sections use hoisted roles and sort members`() {
     let members = [
         Member(
             user: User(id: UserID(rawValue: 1), username: "zed", displayName: "Zed"),
@@ -284,7 +284,7 @@ import Foundation
             status: .offline,
             rolePosition: 10,
             isRoleCategory: true
-        ),
+        )
     ]
 
     let sections = MemberSection.make(from: members)
@@ -294,14 +294,14 @@ import Foundation
 }
 
 @MainActor
-@Test func channelGroupsPlaceVoiceChannelsAfterTextChannels() {
+@Test func `channel groups place voice channels after text channels`() {
     let guildID = GuildID(rawValue: 20)
     let categoryID = ChannelID(rawValue: 21)
     let channels = [
         Channel(id: ChannelID(rawValue: 22), guildID: guildID, name: "Voice first by position", kind: .voice, category: "Chat", categoryID: categoryID, position: 0),
         Channel(id: ChannelID(rawValue: 23), guildID: guildID, name: "general", category: "Chat", categoryID: categoryID, position: 2),
         Channel(id: ChannelID(rawValue: 24), guildID: guildID, name: "announcements", kind: .announcement, category: "Chat", categoryID: categoryID, position: 3),
-        Channel(id: ChannelID(rawValue: 25), guildID: guildID, name: "Voice second", kind: .voice, category: "Chat", categoryID: categoryID, position: 1),
+        Channel(id: ChannelID(rawValue: 25), guildID: guildID, name: "Voice second", kind: .voice, category: "Chat", categoryID: categoryID, position: 1)
     ]
 
     let group = ChannelGroup.make(from: channels)[0]
@@ -309,7 +309,7 @@ import Foundation
 }
 
 @MainActor
-@Test func selectingVoiceChannelNavigatesWithoutJoiningOrLoadingMessages() async throws {
+@Test func `selecting voice channel navigates without joining or loading messages`() async throws {
     let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     let voiceChannel = try #require(model.visibleChannels.first(where: { $0.kind == .voice }))
@@ -324,7 +324,7 @@ import Foundation
 }
 
 @MainActor
-@Test func profileRoleNamesRemoveCustomEmojiMarkupAndCollapseWhitespace() {
+@Test func `profile role names remove custom emoji markup and collapse whitespace`() {
     #expect(
         ProfileRolePresentation.normalizedName("  Developers   <:sparkle:123456>   💖  ")
             == "Developers 💖"
@@ -334,7 +334,7 @@ import Foundation
 }
 
 @MainActor
-@Test func selectingMemberLoadsFullProfile() async throws {
+@Test func `selecting member loads full profile`() async throws {
     let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     let member = try #require(model.members.first)
@@ -351,7 +351,7 @@ import Foundation
 }
 
 @MainActor
-@Test func messageProfileDoesNotCompeteWithTheMemberInspectorPopover() async throws {
+@Test func `message profile does not compete with the member inspector popover`() async throws {
     let model = AppModel(launchMode: .offlineTesting)
     await model.start()
     let member = try #require(model.members.first)
@@ -370,7 +370,7 @@ import Foundation
 }
 
 @MainActor
-@Test func demoEmojiPreferencesAreIsolatedAndMockEmojisDoNotUseDiscordCDN() async throws {
+@Test func `demo emoji preferences are isolated and mock emojis do not use discord CDN`() async throws {
     let provider = MockChatProvider()
     let model = AppModel(launchMode: .offlineTesting, provider: provider)
     await model.start()
@@ -385,13 +385,13 @@ import Foundation
 }
 
 @MainActor
-@Test func channelLoadsAreSingleFlightCachedAndProtectedFromStaleResponses() async throws {
+@Test func `channel loads are single flight cached and protected from stale responses`() async throws {
     let provider = ChannelLoadTestProvider()
     let model = AppModel(launchMode: .offlineTesting, provider: provider)
 
     await model.start()
-    let firstChannel = ChannelID(rawValue: 91_001)
-    let secondChannel = ChannelID(rawValue: 91_002)
+    let firstChannel = ChannelID(rawValue: 91001)
+    let secondChannel = ChannelID(rawValue: 91002)
     #expect(await provider.requestCount(for: firstChannel) == 1)
     #expect(model.messages.map(\.channelID) == [firstChannel])
 
@@ -410,7 +410,7 @@ import Foundation
 }
 
 @MainActor
-@Test func voiceServerReallocationKeepsTheCallSelectedAndReconnects() async throws {
+@Test func `voice server reallocation keeps the call selected and reconnects`() async throws {
     let provider = VoiceMigrationTestProvider()
     let model = AppModel(launchMode: .offlineTesting, provider: provider)
     await model.start()
@@ -425,17 +425,17 @@ import Foundation
     #expect(model.activeVoiceChannel?.id == voiceChannel.id)
     #expect(model.voiceSessionState == .reconnecting)
 
-    await provider.emit(.voiceServerChanged(await provider.connectionInfo(token: "replacement")))
+    await provider.emit(.voiceServerChanged(provider.connectionInfo(token: "replacement")))
     try await Task.sleep(for: .milliseconds(20))
     #expect(model.activeVoiceChannel?.id == voiceChannel.id)
     #expect(model.voiceSessionState == .connected)
 }
 
 private actor ChannelLoadTestProvider: ChatProvider {
-    private let user = User(id: UserID(rawValue: 91_000), username: "tester", displayName: "Tester")
+    private let user = User(id: UserID(rawValue: 91000), username: "tester", displayName: "Tester")
     private let testChannels = [
-        Channel(id: ChannelID(rawValue: 91_001), guildID: nil, name: "general"),
-        Channel(id: ChannelID(rawValue: 91_002), guildID: nil, name: "other"),
+        Channel(id: ChannelID(rawValue: 91001), guildID: nil, name: "general"),
+        Channel(id: ChannelID(rawValue: 91002), guildID: nil, name: "other")
     ]
     private var messageRequests: [ChannelID: Int] = [:]
 
@@ -443,12 +443,22 @@ private actor ChannelLoadTestProvider: ChatProvider {
         BootstrapSnapshot(currentUser: user, guilds: [], channels: testChannels, members: [])
     }
 
-    func channels(in guildID: GuildID?) async throws -> [Channel] { testChannels }
-    func members(in guildID: GuildID?) async throws -> [Member] { [] }
+    func channels(in guildID: GuildID?) async throws -> [Channel] {
+        testChannels
+    }
+
+    func members(in guildID: GuildID?) async throws -> [Member] {
+        []
+    }
+
     func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
         throw ChatProviderError.invalidRequest("Profiles are not part of this test.")
     }
-    func currentStatus() async -> PresenceStatus { .online }
+
+    func currentStatus() async -> PresenceStatus {
+        .online
+    }
+
     func updateStatus(_ status: PresenceStatus) async throws {}
 
     func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
@@ -468,20 +478,27 @@ private actor ChannelLoadTestProvider: ChatProvider {
     func send(_ draft: SendMessageDraft) async throws -> Message {
         throw ChatProviderError.invalidRequest("Sending is not part of this test.")
     }
+
     func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message {
         throw ChatProviderError.invalidRequest("Editing is not part of this test.")
     }
+
     func delete(messageID: MessageID, channelID: ChannelID) async throws {}
     func toggleReaction(_ emoji: String, messageID: MessageID, channelID: ChannelID) async throws {}
-    func eventStream() async -> AsyncStream<ClientEvent> { AsyncStream { $0.finish() } }
+    func eventStream() async -> AsyncStream<ClientEvent> {
+        AsyncStream { $0.finish() }
+    }
+
     func disconnect() async {}
 
-    func requestCount(for channelID: ChannelID) -> Int { messageRequests[channelID, default: 0] }
+    func requestCount(for channelID: ChannelID) -> Int {
+        messageRequests[channelID, default: 0]
+    }
 }
 
 private actor SuspendedBootstrapTestProvider: ChatProvider {
-    private let user = User(id: UserID(rawValue: 93_000), username: "tester", displayName: "Tester")
-    private let channel = Channel(id: ChannelID(rawValue: 93_001), guildID: nil, name: "general")
+    private let user = User(id: UserID(rawValue: 93000), username: "tester", displayName: "Tester")
+    private let channel = Channel(id: ChannelID(rawValue: 93001), guildID: nil, name: "general")
     private var bootstrapStarted = false
     private var startWaiters: [CheckedContinuation<Void, Never>] = []
     private var bootstrapContinuation: CheckedContinuation<Void, Never>?
@@ -503,7 +520,9 @@ private actor SuspendedBootstrapTestProvider: ChatProvider {
     }
 
     func waitUntilBootstrapStarts() async {
-        if bootstrapStarted { return }
+        if bootstrapStarted {
+            return
+        }
         await withCheckedContinuation { startWaiters.append($0) }
     }
 
@@ -512,34 +531,50 @@ private actor SuspendedBootstrapTestProvider: ChatProvider {
         bootstrapContinuation = nil
     }
 
-    func channels(in guildID: GuildID?) async throws -> [Channel] { [channel] }
-    func members(in guildID: GuildID?) async throws -> [Member] { [] }
+    func channels(in guildID: GuildID?) async throws -> [Channel] {
+        [channel]
+    }
+
+    func members(in guildID: GuildID?) async throws -> [Member] {
+        []
+    }
+
     func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
         throw ChatProviderError.invalidRequest("Profiles are not part of this test.")
     }
-    func currentStatus() async -> PresenceStatus { .online }
+
+    func currentStatus() async -> PresenceStatus {
+        .online
+    }
+
     func updateStatus(_ status: PresenceStatus) async throws {}
     func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
         MessagePage(messages: [], hasMoreBefore: false)
     }
+
     func send(_ draft: SendMessageDraft) async throws -> Message {
         throw ChatProviderError.invalidRequest("Sending is not part of this test.")
     }
+
     func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message {
         throw ChatProviderError.invalidRequest("Editing is not part of this test.")
     }
+
     func delete(messageID: MessageID, channelID: ChannelID) async throws {}
     func toggleReaction(_ emoji: String, messageID: MessageID, channelID: ChannelID) async throws {}
-    func eventStream() async -> AsyncStream<ClientEvent> { AsyncStream { $0.finish() } }
+    func eventStream() async -> AsyncStream<ClientEvent> {
+        AsyncStream { $0.finish() }
+    }
+
     func disconnect() async {}
 }
 
 private actor VoiceMigrationTestProvider: ChatProvider {
-    private let guild = Guild(id: GuildID(rawValue: 92_000), name: "Voice Test")
-    private let user = User(id: UserID(rawValue: 92_001), username: "tester", displayName: "Tester")
+    private let guild = Guild(id: GuildID(rawValue: 92000), name: "Voice Test")
+    private let user = User(id: UserID(rawValue: 92001), username: "tester", displayName: "Tester")
     private let channel = Channel(
-        id: ChannelID(rawValue: 92_002),
-        guildID: GuildID(rawValue: 92_000),
+        id: ChannelID(rawValue: 92002),
+        guildID: GuildID(rawValue: 92000),
         name: "Lounge",
         kind: .voice
     )
@@ -549,22 +584,35 @@ private actor VoiceMigrationTestProvider: ChatProvider {
         BootstrapSnapshot(currentUser: user, guilds: [guild], channels: [channel], members: [])
     }
 
-    func channels(in guildID: GuildID?) async throws -> [Channel] { [channel] }
-    func members(in guildID: GuildID?) async throws -> [Member] { [] }
+    func channels(in guildID: GuildID?) async throws -> [Channel] {
+        [channel]
+    }
+
+    func members(in guildID: GuildID?) async throws -> [Member] {
+        []
+    }
+
     func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
         throw ChatProviderError.invalidRequest("Profiles are not part of this test.")
     }
-    func currentStatus() async -> PresenceStatus { .online }
+
+    func currentStatus() async -> PresenceStatus {
+        .online
+    }
+
     func updateStatus(_ status: PresenceStatus) async throws {}
     func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
         MessagePage(messages: [], hasMoreBefore: false)
     }
+
     func send(_ draft: SendMessageDraft) async throws -> Message {
         throw ChatProviderError.invalidRequest("Sending is not part of this test.")
     }
+
     func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message {
         throw ChatProviderError.invalidRequest("Editing is not part of this test.")
     }
+
     func delete(messageID: MessageID, channelID: ChannelID) async throws {}
     func toggleReaction(_ emoji: String, messageID: MessageID, channelID: ChannelID) async throws {}
     func joinVoice(
@@ -575,6 +623,7 @@ private actor VoiceMigrationTestProvider: ChatProvider {
     ) async throws -> VoiceConnectionInfo {
         connectionInfo(token: "initial")
     }
+
     func updateVoiceState(
         channelID: ChannelID?,
         guildID: GuildID?,
@@ -585,6 +634,7 @@ private actor VoiceMigrationTestProvider: ChatProvider {
     func eventStream() async -> AsyncStream<ClientEvent> {
         AsyncStream { continuation = $0 }
     }
+
     func disconnect() async {
         continuation?.finish()
         continuation = nil

@@ -6,7 +6,7 @@ import Foundation
 /// Discord host and the real Mac. A server-issued fingerprint can be supplied
 /// after the legitimate unauthenticated experiments flow; it is never invented.
 public struct DiscordClientMetadata: Sendable {
-    nonisolated private static let clientLaunchID = UUID().uuidString.lowercased()
+    private nonisolated static let clientLaunchID = UUID().uuidString.lowercased()
     let locale: String
     let timeZone: String
     let acceptLanguage: String
@@ -45,8 +45,8 @@ public struct DiscordClientMetadata: Sendable {
             "browser_version": .string(baseline.electronVersion),
             "os_sdk_version": .string(osVersion.split(separator: ".").first.map(String.init) ?? ""),
             "client_build_number": .number(Double(baseline.webBuildNumber)),
-            "native_build_number": .number(85_861),
-            "client_app_state": .string("focused"),
+            "native_build_number": .number(85861),
+            "client_app_state": .string("focused")
         ]
     }
 
@@ -57,7 +57,7 @@ public struct DiscordClientMetadata: Sendable {
     public func apply(to request: inout URLRequest) throws {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("*/*", forHTTPHeaderField: "Accept")
-        request.setValue(try superPropertiesHeader(), forHTTPHeaderField: "X-Super-Properties")
+        try request.setValue(superPropertiesHeader(), forHTTPHeaderField: "X-Super-Properties")
         request.setValue(locale, forHTTPHeaderField: "X-Discord-Locale")
         request.setValue(timeZone, forHTTPHeaderField: "X-Discord-Timezone")
         request.setValue(acceptLanguage, forHTTPHeaderField: "Accept-Language")
@@ -90,17 +90,17 @@ public struct DiscordClientMetadata: Sendable {
 
     static let messageContextHeader = Data(#"{"location":"chat_input"}"#.utf8).base64EncodedString()
 
-    nonisolated private static var architecture: String {
+    private nonisolated static var architecture: String {
         #if arch(arm64)
-        "arm64"
+            "arm64"
         #elseif arch(x86_64)
-        "x64"
+            "x64"
         #else
-        "unknown"
+            "unknown"
         #endif
     }
 
-    nonisolated private static func kernelVersion() -> String {
+    private nonisolated static func kernelVersion() -> String {
         var systemInfo = utsname()
         uname(&systemInfo)
         return withUnsafePointer(to: &systemInfo.release) { pointer in

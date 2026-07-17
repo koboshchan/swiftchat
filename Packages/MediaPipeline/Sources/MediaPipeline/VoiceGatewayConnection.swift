@@ -1,7 +1,7 @@
 import DaveKit
-import SwiftchatModels
 import Foundation
 import OSLog
+import SwiftchatModels
 
 private let voiceGatewayLogger = Logger(subsystem: "dev.swiftchat.Swiftchat", category: "VoiceGateway")
 
@@ -20,7 +20,7 @@ public actor VoiceGatewayConnection {
     public init(info: VoiceConnectionInfo, session: URLSession = .shared) {
         self.info = info
         self.session = session
-        let stream = AsyncStream<SequencedVoiceGatewayEvent>.makeStream(bufferingPolicy: .bufferingNewest(1_000))
+        let stream = AsyncStream<SequencedVoiceGatewayEvent>.makeStream(bufferingPolicy: .bufferingNewest(1000))
         events = stream.stream
         continuation = stream.continuation
     }
@@ -139,7 +139,9 @@ public actor VoiceGatewayConnection {
                 case let .string(string): try VoiceGatewayCodec.decodeJSON(Data(string.utf8))
                 @unknown default: throw VoiceGatewayCodecError.malformedPayload
                 }
-                if let sequence = sequenced.sequence { lastSequence = Int(sequence) }
+                if let sequence = sequenced.sequence {
+                    lastSequence = Int(sequence)
+                }
                 if sequenced.event.isDiagnosticMilestone {
                     voiceGatewayLogger.info(
                         "Voice gateway event; name=\(sequenced.event.diagnosticName, privacy: .public), sequence=\(sequenced.sequence.map(String.init) ?? "none", privacy: .public)"
@@ -155,7 +157,9 @@ public actor VoiceGatewayConnection {
                 }
                 continuation.yield(sequenced)
             } catch {
-                if let sequence = Self.sequence(in: message) { lastSequence = Int(sequence) }
+                if let sequence = Self.sequence(in: message) {
+                    lastSequence = Int(sequence)
+                }
                 voiceGatewayLogger.warning(
                     "Voice gateway payload ignored; error=\(String(reflecting: error), privacy: .public)"
                 )
@@ -182,20 +186,20 @@ public actor VoiceGatewayConnection {
         heartbeatTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
-                let acknowledged = await self.lastHeartbeatAcknowledged
+                let acknowledged = await lastHeartbeatAcknowledged
                 guard acknowledged else {
-                    await self.closeSocketOnly()
+                    await closeSocketOnly()
                     return
                 }
-                await self.markHeartbeatPending()
-                let nonce = UInt64(Date.now.timeIntervalSince1970 * 1_000)
+                await markHeartbeatPending()
+                let nonce = UInt64(Date.now.timeIntervalSince1970 * 1000)
                 do {
-                    try await self.sendText(VoiceGatewayCodec.heartbeat(
+                    try await sendText(VoiceGatewayCodec.heartbeat(
                         nonce: nonce,
-                        sequence: await self.lastSequence
+                        sequence: lastSequence
                     ))
                 } catch {
-                    await self.closeSocketOnly()
+                    await closeSocketOnly()
                     return
                 }
                 try? await Task.sleep(for: interval)

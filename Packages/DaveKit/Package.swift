@@ -8,7 +8,7 @@ let package = Package(
         .library(
             name: "DaveKit",
             targets: ["DaveKit"]
-        ),
+        )
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.9.0"),
@@ -19,7 +19,7 @@ let package = Package(
             name: "DaveKit",
             dependencies: [
                 .target(name: "CLibdave"),
-                .product(name: "Logging", package: "swift-log"),
+                .product(name: "Logging", package: "swift-log")
             ],
             swiftSettings: [
                 .interoperabilityMode(.Cxx)
@@ -32,7 +32,7 @@ let package = Package(
                 .target(name: "mlspp"),
                 .target(name: "bytes"),
                 .target(name: "tls_syntax"),
-                .product(name: "OpenSSL", package: "OpenSSL-Package"),
+                .product(name: "OpenSSL", package: "OpenSSL-Package")
             ],
             exclude: [
                 "libdave/cpp/src/mls/detail/persisted_key_pair_apple.cpp",
@@ -42,13 +42,13 @@ let package = Package(
                 "libdave/cpp/src/mls/persisted_key_pair.cpp",
                 "libdave/cpp/src/bindings_wasm.cpp",
                 "libdave/cpp/src/boringssl_cryptor.cpp",
-                "libdave/cpp/src/boringssl_cryptor.h",
+                "libdave/cpp/src/boringssl_cryptor.h"
             ],
             sources: ["libdave/cpp/src"],
             cxxSettings: [
                 .headerSearchPath("libdave/cpp/includes"),
-                .headerSearchPath("libdave/cpp/src"),
-            ],
+                .headerSearchPath("libdave/cpp/src")
+            ]
         ),
 
         .target(
@@ -56,19 +56,19 @@ let package = Package(
             dependencies: [
                 .target(name: "hpke"),
                 .target(name: "bytes"),
-                .target(name: "tls_syntax"),
+                .target(name: "tls_syntax")
             ],
             path: "Sources/CMLS/mlspp",
             sources: ["src"],
             cxxSettings: [
                 .define("WITH_PQ")
-            ],
+            ]
         ),
 
         .target(
             name: "mlspp_namespace",
             path: "Sources/CMLS/namespace",
-            publicHeadersPath: ".",
+            publicHeadersPath: "."
         ),
 
         .target(
@@ -78,7 +78,7 @@ let package = Package(
                 .target(name: "bytes"),
                 .target(name: "tls_syntax"),
                 .target(name: "CJson"),
-                .product(name: "OpenSSL", package: "OpenSSL-Package"),
+                .product(name: "OpenSSL", package: "OpenSSL-Package")
             ],
             path: "Sources/CMLS/mlspp/lib/hpke",
             sources: ["src"],
@@ -87,25 +87,25 @@ let package = Package(
                 // OpenSSL 3.5+ provides ML-KEM. This must match the mlspp target;
                 // otherwise its cipher-suite table references algorithms omitted
                 // from the HPKE factory and MLS initialization fails.
-                .define("WITH_PQ"),
-            ],
+                .define("WITH_PQ")
+            ]
         ),
 
         .target(
             name: "bytes",
             dependencies: [
                 .target(name: "mlspp_namespace"),
-                .target(name: "tls_syntax"),
+                .target(name: "tls_syntax")
             ],
             path: "Sources/CMLS/mlspp/lib/bytes",
-            sources: ["src"],
+            sources: ["src"]
         ),
 
         .target(
             name: "tls_syntax",
             dependencies: [.target(name: "mlspp_namespace")],
             path: "Sources/CMLS/mlspp/lib/tls_syntax",
-            sources: ["src"],
+            sources: ["src"]
         ),
 
         .target(name: "CJson"),
@@ -115,9 +115,9 @@ let package = Package(
             dependencies: ["DaveKit"],
             swiftSettings: [.interoperabilityMode(.Cxx)],
             linkerSettings: [
-                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@loader_path/../../.."]),
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@loader_path/../../.."])
             ]
-        ),
+        )
     ],
-    cxxLanguageStandard: .cxx17,
+    cxxLanguageStandard: .cxx17
 )

@@ -5,7 +5,7 @@ class Decryptor {
     private let decryptorHandle: DAVEDecryptorHandle
 
     init() {
-        self.decryptorHandle = daveDecryptorCreate()
+        decryptorHandle = daveDecryptorCreate()
     }
 
     deinit {
@@ -13,11 +13,11 @@ class Decryptor {
     }
 
     func transitionToKeyRatchet(keyRatchet: KeyRatchet) {
-        daveDecryptorTransitionToKeyRatchet(self.decryptorHandle, keyRatchet.handle)
+        daveDecryptorTransitionToKeyRatchet(decryptorHandle, keyRatchet.handle)
     }
 
     func transitionToPassthroughMode(enabled: Bool) {
-        daveDecryptorTransitionToPassthroughMode(self.decryptorHandle, enabled)
+        daveDecryptorTransitionToPassthroughMode(decryptorHandle, enabled)
     }
 
     func decrypt(data: Data, mediaType: DaveMediaType = .audio) throws(DecryptError) -> Data {
@@ -27,7 +27,7 @@ class Decryptor {
             data.count
         )
         var decryptedData = Data(count: max(capacity, data.count))
-        var outputLength: Int = 0
+        var outputLength = 0
 
         let result = decryptedData.withUnsafeMutableBytes { decryptedData in
             data.withUnsafeBytes { data in
@@ -41,7 +41,7 @@ class Decryptor {
                     data.count,
                     decryptedData.baseAddress!,
                     decryptedData.count,
-                    &outputLength,
+                    &outputLength
                 )
             }
         }
@@ -50,7 +50,7 @@ class Decryptor {
             throw error
         }
 
-        decryptedData.removeSubrange(outputLength..<decryptedData.count)
+        decryptedData.removeSubrange(outputLength ..< decryptedData.count)
         return decryptedData
     }
 }

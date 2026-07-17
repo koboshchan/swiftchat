@@ -136,8 +136,13 @@ public struct DiscordEmoji: Identifiable, Codable, Hashable, Sendable {
         self.isAvailable = isAvailable
     }
 
-    public var messageToken: String { "<\(isAnimated ? "a" : ""):\(name):\(id)>" }
-    public var reactionToken: String { "\(name):\(id)" }
+    public var messageToken: String {
+        "<\(isAnimated ? "a" : ""):\(name):\(id)>"
+    }
+
+    public var reactionToken: String {
+        "\(name):\(id)"
+    }
 
     public var imageURL: URL? {
         URL(string: "https://cdn.discordapp.com/emojis/\(id).webp?size=96&animated=\(isAnimated ? "true" : "false")")
@@ -208,7 +213,9 @@ public struct Channel: Identifiable, Codable, Hashable, Sendable {
 public enum PresenceStatus: String, Codable, CaseIterable, Hashable, Sendable {
     case online, idle, dnd, invisible, offline
 
-    public var isVisibleOnline: Bool { self == .online || self == .idle || self == .dnd }
+    public var isVisibleOnline: Bool {
+        self == .online || self == .idle || self == .dnd
+    }
 }
 
 public struct GuildRole: Identifiable, Codable, Hashable, Sendable {
@@ -261,7 +268,10 @@ public struct Attachment: Identifiable, Codable, Hashable, Sendable {
 }
 
 public struct Reaction: Identifiable, Codable, Hashable, Sendable {
-    public var id: String { emoji }
+    public var id: String {
+        emoji
+    }
+
     public var emoji: String
     public var count: Int
     public var didCurrentUserReact: Bool
@@ -333,7 +343,10 @@ public struct Message: Identifiable, Codable, Hashable, Sendable {
 }
 
 public struct Member: Identifiable, Codable, Hashable, Sendable {
-    public var id: UserID { user.id }
+    public var id: UserID {
+        user.id
+    }
+
     public var user: User
     public var roleName: String
     public var rolePosition: Int?
@@ -344,7 +357,9 @@ public struct Member: Identifiable, Codable, Hashable, Sendable {
     public var activityText: String?
     public var customStatus: String?
 
-    public var isOnline: Bool { status.isVisibleOnline }
+    public var isOnline: Bool {
+        status.isVisibleOnline
+    }
 
     public init(
         user: User,
@@ -361,7 +376,7 @@ public struct Member: Identifiable, Codable, Hashable, Sendable {
         self.roleName = roleName
         self.rolePosition = rolePosition
         self.isRoleCategory = isRoleCategory
-        self.status = isOnline ? .online : .offline
+        status = isOnline ? .online : .offline
         self.roles = roles
         self.guildAvatarURL = guildAvatarURL
         self.activityText = activityText
@@ -462,7 +477,10 @@ public struct ProfileEffect: Identifiable, Codable, Hashable, Sendable {
 }
 
 public struct ProfileEffectAnimation: Identifiable, Codable, Hashable, Sendable {
-    public var id: String { "\(sourceURL.absoluteString):\(startMilliseconds):\(zIndex)" }
+    public var id: String {
+        "\(sourceURL.absoluteString):\(startMilliseconds):\(zIndex)"
+    }
+
     public var sourceURL: URL
     public var isLooping: Bool
     public var width: Int?
@@ -514,7 +532,10 @@ public struct MutualGuild: Identifiable, Codable, Hashable, Sendable {
 }
 
 public struct ConnectedAccount: Identifiable, Codable, Hashable, Sendable {
-    public var id: String { "\(type):\(accountID)" }
+    public var id: String {
+        "\(type):\(accountID)"
+    }
+
     public var accountID: String
     public var type: String
     public var name: String
@@ -531,7 +552,10 @@ public struct ConnectedAccount: Identifiable, Codable, Hashable, Sendable {
 }
 
 public struct UserProfile: Identifiable, Codable, Hashable, Sendable {
-    public var id: UserID { user.id }
+    public var id: UserID {
+        user.id
+    }
+
     public var user: User
     public var displayName: String
     public var avatarURL: URL?
@@ -715,7 +739,7 @@ public enum ClientNonce {
     private static let sequenceState = Mutex((millisecond: UInt64(0), sequence: UInt16(0)))
 
     public static func make(now: Date = .now) -> String {
-        let milliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1_000))
+        let milliseconds = UInt64(max(0, now.timeIntervalSince1970 * 1000))
         guard milliseconds >= discordEpochMilliseconds else { return "0" }
         let sequence = sequenceState.withLock { state -> UInt16 in
             if state.millisecond == milliseconds {

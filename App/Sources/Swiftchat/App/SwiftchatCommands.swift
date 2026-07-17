@@ -12,4 +12,3 @@ struct SwiftchatCommands: Commands {
         }
     }
 }
-

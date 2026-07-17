@@ -1,21 +1,21 @@
 import Foundation
-import Testing
 @testable import MediaPipeline
+import Testing
 
 @Test(arguments: VoiceTransportMode.allCases)
-func transportEncryptionRoundTripsAndAuthenticatesRTPHeader(mode: VoiceTransportMode) throws {
+func `transport encryption round trips and authenticates RTP header`(mode: VoiceTransportMode) throws {
     let header = RTPHeader(
         payloadType: 120,
-        sequence: 65_530,
+        sequence: 65530,
         timestamp: 123_456,
         ssrc: 42
     ).encoded
-    var cipher = try VoiceTransportCipher(mode: mode, key: Array(0..<32), initialNonce: 7)
+    var cipher = try VoiceTransportCipher(mode: mode, key: Array(0 ..< 32), initialNonce: 7)
     let opus = Data([0xF8, 0xFF, 0xFE])
     let packet = try cipher.seal(header: header, plaintext: opus)
     let opened = try cipher.open(packet: packet)
 
-    #expect(opened.header.sequence == 65_530)
+    #expect(opened.header.sequence == 65530)
     #expect(opened.header.ssrc == 42)
     #expect(opened.payload == opus)
     #expect(packet.suffix(4) == Data([0, 0, 0, 8]))
@@ -27,7 +27,7 @@ func transportEncryptionRoundTripsAndAuthenticatesRTPHeader(mode: VoiceTransport
     }
 }
 
-@Test func rtpSizeModeAuthenticatesExtensionPreambleAndEncryptsExtensionData() throws {
+@Test func `rtp size mode authenticates extension preamble and encrypts extension data`() throws {
     let header = RTPHeader(
         payloadType: 120,
         sequence: 1,
@@ -48,12 +48,12 @@ func transportEncryptionRoundTripsAndAuthenticatesRTPHeader(mode: VoiceTransport
     #expect(opened.payload == opus)
 }
 
-@Test func rtpSizeModeStripsAuthenticatedRTPPaddingBeforeMediaDecode() throws {
+@Test func `rtp size mode strips authenticated RTP padding before media decode`() throws {
     let header = RTPHeader(
         padding: true,
         payloadType: 101,
         sequence: 12,
-        timestamp: 90_000,
+        timestamp: 90000,
         ssrc: 77
     )
     var cipher = try VoiceTransportCipher(
@@ -70,7 +70,7 @@ func transportEncryptionRoundTripsAndAuthenticatesRTPHeader(mode: VoiceTransport
 }
 
 @Test(arguments: VoiceTransportMode.allCases)
-func transportEncryptionRoundTripsRTCPFeedback(mode: VoiceTransportMode) throws {
+func `transport encryption round trips RTCP feedback`(mode: VoiceTransportMode) throws {
     let nack = RTCPGenericNACK(
         senderSSRC: 42,
         mediaSSRC: 99,

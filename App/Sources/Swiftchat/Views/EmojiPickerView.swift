@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
-import SwiftchatModels
 import Observation
+import SwiftchatModels
 import SwiftUI
 
 enum EmojiPickerSelection {
@@ -67,11 +67,11 @@ private struct EmojiSkinToneMenu: View {
             Image(nsImage: EmojiSkinToneGlyph.image(
                 for: (NativeEmojiSkinTone(rawValue: selection) ?? .standard).symbol
             ))
-                .resizable()
-                .interpolation(.high)
-                .scaledToFit()
-                .frame(width: 22, height: 22)
-                .frame(width: 28, height: 28)
+            .resizable()
+            .interpolation(.high)
+            .scaledToFit()
+            .frame(width: 22, height: 22)
+            .frame(width: 28, height: 28)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
@@ -155,7 +155,9 @@ private enum EmojiSkinToneGlyph {
     private static var cache: [String: NSImage] = [:]
 
     static func image(for symbol: String) -> NSImage {
-        if let cached = cache[symbol] { return cached }
+        if let cached = cache[symbol] {
+            return cached
+        }
 
         let size = NSSize(width: 26, height: 26)
         let font = NSFont(name: "Apple Color Emoji", size: 20) ?? .systemFont(ofSize: 20)
@@ -178,23 +180,32 @@ private enum EmojiPickerItem: Identifiable {
     case native(NativeEmoji)
     case custom(DiscordEmoji)
 
-    var id: String { usageKey }
-    var usageKey: String { selection.usageKey }
+    var id: String {
+        usageKey
+    }
+
+    var usageKey: String {
+        selection.usageKey
+    }
+
     var discordKey: String {
         switch self {
         case let .native(emoji): emoji.discordKey
         case let .custom(emoji): emoji.id
         }
     }
+
     var selection: EmojiPickerSelection {
         selection(skinTone: .standard)
     }
+
     func selection(skinTone: NativeEmojiSkinTone) -> EmojiPickerSelection {
         switch self {
         case let .native(emoji): .native(emoji.value(for: skinTone))
         case let .custom(emoji): .custom(emoji)
         }
     }
+
     var name: String {
         switch self {
         case let .native(emoji): emoji.name
@@ -237,8 +248,9 @@ private enum EmojiPickerItem: Identifiable {
                     StaticEmojiImage(url: url)
                         .frame(width: dimension - 2, height: dimension - 2)
                 }
+            } else {
+                Image(systemName: "face.dashed")
             }
-            else { Image(systemName: "face.dashed") }
         }
     }
 }
@@ -271,7 +283,8 @@ enum EmojiPickerGridNavigation {
         guard let currentID,
               let position = rows.enumerated().lazy.compactMap({ rowIndex, row -> (Int, Int)? in
                   row.firstIndex(of: currentID).map { (rowIndex, $0) }
-              }).first else {
+              }).first
+        else {
             return firstID
         }
 
@@ -279,7 +292,9 @@ enum EmojiPickerGridNavigation {
         let columnIndex = position.1
         switch direction {
         case .left:
-            if columnIndex > 0 { return rows[rowIndex][columnIndex - 1] }
+            if columnIndex > 0 {
+                return rows[rowIndex][columnIndex - 1]
+            }
             guard rowIndex > 0 else { return currentID }
             return rows[rowIndex - 1].last ?? currentID
         case .right:
@@ -323,7 +338,9 @@ private enum NativeEmojiSkinTone: String, CaseIterable, Identifiable {
     case mediumDark
     case dark
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var title: String {
         switch self {
@@ -373,7 +390,10 @@ private enum NativeEmojiSkinTone: String, CaseIterable, Identifiable {
 private enum NativeEmojiCategory: String, CaseIterable, Identifiable {
     case smileys, people, nature, food, activities, travel, objects, symbols, flags
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
+
     var title: String {
         switch self {
         case .smileys: "Smileys & Emotion"
@@ -387,6 +407,7 @@ private enum NativeEmojiCategory: String, CaseIterable, Identifiable {
         case .flags: "Flags"
         }
     }
+
     var symbol: String {
         switch self {
         case .smileys: "😀"
@@ -409,11 +430,15 @@ private struct NativeEmoji: Identifiable {
     let category: NativeEmojiCategory
     var skinToneVariants: [NativeEmojiSkinTone: String] = [:]
     var shortcodes: [String] = []
-    var id: String { value }
+    var id: String {
+        value
+    }
+
     var searchText: String {
         ([name, aliases] + shortcodes + shortcodes.map { $0.replacingOccurrences(of: "_", with: " ") })
             .joined(separator: " ")
     }
+
     var discordKey: String {
         shortcodes.first ?? name.lowercased()
             .replacingOccurrences(of: "&", with: "and")
@@ -465,7 +490,8 @@ private enum NativeEmojiCatalog {
               let data = try? Data(contentsOf: url),
               let decoded = try? JSONDecoder().decode(CatalogFile.self, from: data),
               decoded.formatVersion == 1,
-              decoded.unicodeVersion == "17.0" else {
+              decoded.unicodeVersion == "17.0"
+        else {
             return LoadedCatalog(items: [], sourceEntryCount: 0)
         }
         return LoadedCatalog(
@@ -648,7 +674,7 @@ private enum NativeEmojiCatalog {
         .init(value: "🇬🇧", name: "flag United Kingdom", aliases: "uk britain", category: .flags),
         .init(value: "🇪🇺", name: "flag European Union", aliases: "eu europe", category: .flags),
         .init(value: "🇯🇵", name: "flag Japan", aliases: "japan jp", category: .flags),
-        .init(value: "🇨🇦", name: "flag Canada", aliases: "canada ca", category: .flags),
+        .init(value: "🇨🇦", name: "flag Canada", aliases: "canada ca", category: .flags)
     ]
 }
 
@@ -661,20 +687,29 @@ private enum NativeEmojiPickerIndex {
 }
 
 enum NativeEmojiCatalogDiagnostics {
-    static var sourceEntryCount: Int { NativeEmojiCatalog.sourceEntryCount }
-    static var itemCount: Int { NativeEmojiCatalog.items.count }
+    static var sourceEntryCount: Int {
+        NativeEmojiCatalog.sourceEntryCount
+    }
+
+    static var itemCount: Int {
+        NativeEmojiCatalog.items.count
+    }
+
     static var skinToneCapableItemCount: Int {
         NativeEmojiCatalog.items.count(where: { !$0.skinToneVariants.isEmpty })
     }
+
     static var wavingHandValues: [String] {
         guard let wave = NativeEmojiCatalog.items.first(where: { $0.value == "👋" }) else { return [] }
         return NativeEmojiSkinTone.allCases.map { wave.value(for: $0) }
     }
+
     static var mediumToneVariationSelectorValues: [String] {
         ["✌️", "☝️", "✍️"].compactMap { base in
             NativeEmojiCatalog.items.first(where: { $0.value == base })?.value(for: .medium)
         }
     }
+
     static var baseItemsContainingSkinToneModifier: Int {
         NativeEmojiCatalog.items.count { emoji in
             emoji.value.unicodeScalars.contains {
@@ -682,23 +717,29 @@ enum NativeEmojiCatalogDiagnostics {
             }
         }
     }
+
     static var categoryItemCounts: [String: Int] {
         Dictionary(grouping: NativeEmojiCatalog.items, by: { $0.category.rawValue })
             .mapValues(\.count)
     }
+
     static func shortcode(for value: String) -> String? {
         NativeEmojiCatalog.items.first(where: { $0.value == value }).map { ":\($0.discordKey):" }
     }
+
     static func shortcodes(for value: String) -> [String] {
         NativeEmojiCatalog.items.first(where: { $0.value == value })?.shortcodes ?? []
     }
+
     static func searchMatches(value: String, query: String) -> Bool {
         guard let emoji = NativeEmojiCatalog.items.first(where: { $0.value == value }) else { return false }
         return EmojiSearchMatcher.matches(emoji.searchText, query: query)
     }
+
     static var emojiCountWithDiscordShortcodes: Int {
         NativeEmojiCatalog.items.count { !$0.shortcodes.isEmpty }
     }
+
     static var discordShortcodeAliasCount: Int {
         NativeEmojiCatalog.items.reduce(0) { $0 + $1.shortcodes.count }
     }
@@ -720,13 +761,17 @@ enum EmojiSearchMatcher {
 
 enum EmojiPickerPerformanceDiagnostics {
     static let itemsPerRecycledRow = 9
-    static var nativeItemCount: Int { NativeEmojiCatalog.items.count }
+    static var nativeItemCount: Int {
+        NativeEmojiCatalog.items.count
+    }
+
     static var nativeDocumentRowCount: Int {
         NativeEmojiCategory.allCases.reduce(0) { total, category in
             let count = NativeEmojiPickerIndex.itemsByCategory[category]?.count ?? 0
             return total + 1 + max(1, Int(ceil(Double(count) / Double(itemsPerRecycledRow))))
         }
     }
+
     static var nativeSectionIDs: [String] {
         NativeEmojiCategory.allCases.map { EmojiDocumentSection.native($0).id }
     }
@@ -1127,7 +1172,9 @@ private enum EmojiDocumentSection: Hashable, Identifiable {
     }
 
     var isNative: Bool {
-        if case .native = self { return true }
+        if case .native = self {
+            return true
+        }
         return false
     }
 }
@@ -1182,6 +1229,7 @@ private final class EmojiPickerDocumentStore {
             rebuild()
         }
     }
+
     private(set) var rows: [EmojiDocumentRow] = []
     private(set) var selectableCells: [EmojiPickerCell] = []
     private(set) var guilds: [Guild] = []
@@ -1253,7 +1301,7 @@ private final class EmojiPickerDocumentStore {
             return cells
         }
         navigationRows = selectableRows.map { $0.map(\.id) }
-        selectableCells = selectableRows.flatMap { $0 }
+        selectableCells = selectableRows.flatMap(\.self)
         cellsByID = Dictionary(uniqueKeysWithValues: selectableCells.map { ($0.id, $0) })
     }
 
@@ -1286,17 +1334,16 @@ private final class EmojiPickerDocumentStore {
                     return left == right ? $0.name < $1.name : left > right
                 },
                 emptyMessage: "Emojis you use will appear here."
-            ),
+            )
         ]
 
         sections.append(contentsOf: guilds.map { guild in
-            let state: EmojiDocumentSectionData.State
-            if loadingGuilds.contains(guild.id) {
-                state = .loading
+            let state: EmojiDocumentSectionData.State = if loadingGuilds.contains(guild.id) {
+                .loading
             } else if let error = errorsByGuild[guild.id] {
-                state = .failure(error)
+                .failure(error)
             } else {
-                state = .ready
+                .ready
             }
             return EmojiDocumentSectionData(
                 id: .guild(guild.id),
@@ -1357,7 +1404,7 @@ private final class EmojiPickerDocumentStore {
 
         for start in stride(from: 0, to: section.items.count, by: Self.itemsPerRow) {
             let end = min(start + Self.itemsPerRow, section.items.count)
-            let items = Array(section.items[start..<end])
+            let items = Array(section.items[start ..< end])
             let rowID = "emojis:\(section.id.id):\(items[0].id)"
             let cells = items.map { item in
                 EmojiPickerCell(
@@ -1377,7 +1424,7 @@ private final class EmojiPickerDocumentStore {
 
     private func allItems() -> [EmojiPickerItem] {
         let loadedCustom = emojisByGuild.values
-            .flatMap { $0 }
+            .flatMap(\.self)
             .filter(\.isAvailable)
             .map(EmojiPickerItem.custom)
         let loadedIDs = Set(loadedCustom.map(\.discordKey))
@@ -1549,46 +1596,46 @@ private struct EmojiDocumentSidebar: View {
             GeometryReader { _ in
                 ScrollView {
                     LazyVStack(spacing: 2) {
-                            EmojiSidebarBookmark(
-                                section: .favorites, visibleSection: visibleSection,
-                                help: "Favorites", jump: jump
-                            ) { Image(systemName: "star.fill") }
-                            EmojiSidebarBookmark(
-                                section: .frequent, visibleSection: visibleSection,
-                                help: "Frequently Used", jump: jump
-                            ) { Image(systemName: "clock.fill") }
+                        EmojiSidebarBookmark(
+                            section: .favorites, visibleSection: visibleSection,
+                            help: "Favorites", jump: jump
+                        ) { Image(systemName: "star.fill") }
+                        EmojiSidebarBookmark(
+                            section: .frequent, visibleSection: visibleSection,
+                            help: "Frequently Used", jump: jump
+                        ) { Image(systemName: "clock.fill") }
 
-                            if !guilds.isEmpty {
-                                Divider()
-                                    .frame(width: 28)
-                                    .padding(.vertical, 2)
+                        if !guilds.isEmpty {
+                            Divider()
+                                .frame(width: 28)
+                                .padding(.vertical, 2)
 
-                                ForEach(guilds) { guild in
-                                    EmojiSidebarBookmark(
-                                        section: .guild(guild.id), visibleSection: visibleSection,
-                                        help: guild.name, jump: jump
-                                    ) { EmojiGuildBookmarkIcon(guild: guild) }
+                            ForEach(guilds) { guild in
+                                EmojiSidebarBookmark(
+                                    section: .guild(guild.id), visibleSection: visibleSection,
+                                    help: guild.name, jump: jump
+                                ) { EmojiGuildBookmarkIcon(guild: guild) }
+                            }
+                        }
+
+                        VStack(spacing: 2) {
+                            Divider()
+                                .frame(width: 28)
+                                .padding(.vertical, 2)
+
+                            ForEach(NativeEmojiCategory.allCases) { category in
+                                EmojiSidebarBookmark(
+                                    section: .native(category), visibleSection: visibleSection,
+                                    help: category.title, jump: jump
+                                ) {
+                                    Text(category.symbol)
+                                        .font(.system(size: 18))
+                                        .frame(width: 28, height: 28, alignment: .center)
                                 }
                             }
-
-                            VStack(spacing: 2) {
-                                Divider()
-                                    .frame(width: 28)
-                                    .padding(.vertical, 2)
-
-                                ForEach(NativeEmojiCategory.allCases) { category in
-                                    EmojiSidebarBookmark(
-                                        section: .native(category), visibleSection: visibleSection,
-                                        help: category.title, jump: jump
-                                    ) {
-                                        Text(category.symbol)
-                                            .font(.system(size: 18))
-                                            .frame(width: 28, height: 28, alignment: .center)
-                                    }
-                                }
-                            }
-                            .onAppear { nativeCategoriesAreVisible = true }
-                            .onDisappear { nativeCategoriesAreVisible = false }
+                        }
+                        .onAppear { nativeCategoriesAreVisible = true }
+                        .onDisappear { nativeCategoriesAreVisible = false }
                     }
                     .scrollTargetLayout()
                     .padding(.vertical, 4)

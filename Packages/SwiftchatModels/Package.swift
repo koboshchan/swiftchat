@@ -7,6 +7,6 @@ let package = Package(
     products: [.library(name: "SwiftchatModels", targets: ["SwiftchatModels"])],
     targets: [
         .target(name: "SwiftchatModels"),
-        .testTarget(name: "SwiftchatModelsTests", dependencies: ["SwiftchatModels"]),
+        .testTarget(name: "SwiftchatModelsTests", dependencies: ["SwiftchatModels"])
     ]
 )

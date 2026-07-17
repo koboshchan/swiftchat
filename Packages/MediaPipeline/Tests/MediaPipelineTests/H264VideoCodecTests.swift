@@ -1,9 +1,9 @@
 import CoreVideo
 import Foundation
-import Testing
 @testable import MediaPipeline
+import Testing
 
-@Test func nativeH264EncoderAndDecoderProduceDisplayableFrame() async throws {
+@Test func `native H 264 encoder and decoder produce displayable frame`() async throws {
     var pixelBuffer: CVPixelBuffer?
     let pixelStatus = CVPixelBufferCreate(
         kCFAllocatorDefault,

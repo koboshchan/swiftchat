@@ -12,7 +12,9 @@ public struct Snowflake<Kind>: RawRepresentable, Codable, Hashable, Comparable, 
         self.rawValue = rawValue
     }
 
-    public var description: String { String(rawValue) }
+    public var description: String {
+        String(rawValue)
+    }
 
     public static func < (lhs: Self, rhs: Self) -> Bool {
         lhs.rawValue < rhs.rawValue
@@ -46,4 +48,3 @@ public typealias GuildID = Snowflake<GuildKind>
 public typealias ChannelID = Snowflake<ChannelKind>
 public typealias MessageID = Snowflake<MessageKind>
 public typealias RoleID = Snowflake<RoleKind>
-

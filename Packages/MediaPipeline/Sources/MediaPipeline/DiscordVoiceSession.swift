@@ -1,8 +1,8 @@
 import CoreAudio
 import DaveKit
-import SwiftchatModels
 import Foundation
 import OSLog
+import SwiftchatModels
 
 private let voiceMediaLogger = Logger(subsystem: "dev.swiftchat.Swiftchat", category: "VoiceMedia")
 
@@ -109,11 +109,11 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
     private var videoSSRC: UInt32?
     private var rtxSSRC: UInt32?
     private var videoRID = "100"
-    private var sequence = UInt16.random(in: 0...UInt16.max)
-    private var videoSequence = UInt16.random(in: 0...UInt16.max)
-    private var rtxSequence = UInt16.random(in: 0...UInt16.max)
-    private var videoTransportSequence = UInt16.random(in: 0...UInt16.max)
-    private var timestamp = UInt32.random(in: 0...UInt32.max)
+    private var sequence = UInt16.random(in: 0 ... UInt16.max)
+    private var videoSequence = UInt16.random(in: 0 ... UInt16.max)
+    private var rtxSequence = UInt16.random(in: 0 ... UInt16.max)
+    private var videoTransportSequence = UInt16.random(in: 0 ... UInt16.max)
+    private var timestamp = UInt32.random(in: 0 ... UInt32.max)
     private var ssrcToUserID: [UInt32: String] = [:]
     private var rtxToVideoSSRC: [UInt32: UInt32] = [:]
     private var videoDepacketizers: [UInt32: H264RTPDepacketizer] = [:]
@@ -161,7 +161,7 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
         self.info = info
         self.configuration = configuration
         gateway = VoiceGatewayConnection(info: info)
-        let stream = AsyncStream<VoiceSessionEvent>.makeStream(bufferingPolicy: .bufferingNewest(1_000))
+        let stream = AsyncStream<VoiceSessionEvent>.makeStream(bufferingPolicy: .bufferingNewest(1000))
         events = stream.stream
         eventContinuation = stream.continuation
     }
@@ -211,7 +211,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
         connectTimeoutTask?.cancel()
         connectContinuation?.resume(throwing: CancellationError())
         connectContinuation = nil
-        if locallySpeaking, let audioSSRC { try? await gateway.sendSpeaking(flags: 0, ssrc: audioSSRC) }
+        if locallySpeaking, let audioSSRC {
+            try? await gateway.sendSpeaking(flags: 0, ssrc: audioSSRC)
+        }
         updateLocalVoiceActivity(false)
         if let audioSSRC, let videoSSRC, let rtxSSRC {
             try? await gateway.sendVideo(
@@ -226,7 +228,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
         }
         await gateway.close()
         await udp?.close()
-        if let audioEngine { await audioEngine.stop() }
+        if let audioEngine {
+            await audioEngine.stop()
+        }
         cameraGeneration &+= 1
         stopCameraPipeline()
         udp = nil
@@ -248,7 +252,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
 
     public func setMuted(_ muted: Bool) async {
         configuration.isMuted = muted
-        if let audioEngine { await audioEngine.setMuted(muted) }
+        if let audioEngine {
+            await audioEngine.setMuted(muted)
+        }
         if muted {
             updateLocalVoiceActivity(false)
             trailingSilenceFrames = 0
@@ -261,17 +267,23 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
 
     public func setDeafened(_ deafened: Bool) async {
         configuration.isDeafened = deafened
-        if let audioEngine { await audioEngine.setDeafened(deafened) }
+        if let audioEngine {
+            await audioEngine.setDeafened(deafened)
+        }
     }
 
     public func setInputVolume(_ volume: Float) async {
         configuration.inputVolume = min(max(volume, 0), 2)
-        if let audioEngine { await audioEngine.setInputVolume(configuration.inputVolume) }
+        if let audioEngine {
+            await audioEngine.setInputVolume(configuration.inputVolume)
+        }
     }
 
     public func setOutputVolume(_ volume: Float) async {
         configuration.outputVolume = min(max(volume, 0), 2)
-        if let audioEngine { await audioEngine.setOutputVolume(configuration.outputVolume) }
+        if let audioEngine {
+            await audioEngine.setOutputVolume(configuration.outputVolume)
+        }
     }
 
     public func selectInputDevice(_ deviceID: AudioDeviceID?) async throws {
@@ -287,8 +299,12 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
     public func setParticipantVolume(_ volume: Float, userID: String) async {
         let volume = min(max(volume, 0), 2)
         participants[userID]?.volume = volume
-        if let participant = participants[userID] { eventContinuation.yield(.participantChanged(participant)) }
-        if let audioEngine { await audioEngine.setParticipantVolume(volume, userID: userID) }
+        if let participant = participants[userID] {
+            eventContinuation.yield(.participantChanged(participant))
+        }
+        if let audioEngine {
+            await audioEngine.setParticipantVolume(volume, userID: userID)
+        }
     }
 
     public func setCameraEnabled(_ enabled: Bool) async throws {
@@ -392,7 +408,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             case let .clientsConnected(userIDs):
                 for userID in userIDs where userID != info.userID.description {
                     await dave.addUser(userId: userID)
-                    if participants[userID] == nil { participants[userID] = VoiceRemoteParticipant(userID: userID) }
+                    if participants[userID] == nil {
+                        participants[userID] = VoiceRemoteParticipant(userID: userID)
+                    }
                 }
             case let .clientDisconnected(userID):
                 await dave.removeUser(userId: userID)
@@ -435,7 +453,7 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             case .connectionClosed:
                 await reconnectGateway()
             case let .heartbeatAcknowledged(nonce):
-                let now = UInt64(max(0, Date.now.timeIntervalSince1970 * 1_000))
+                let now = UInt64(max(0, Date.now.timeIntervalSince1970 * 1000))
                 let latency = Int(clamping: now >= nonce ? now - nonce : 0)
                 eventContinuation.yield(.latencyUpdated(milliseconds: latency))
             case .hello, .unknown:
@@ -500,7 +518,8 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
                     // off the direct receive loop so a high-bitrate camera cannot leave
                     // Opus packets queued behind a persistent video backlog.
                     if !RTCPHeader.looksLikeRTCP(packet),
-                       let payloadType = RTPHeader.parse(from: packet)?.header.payloadType {
+                       let payloadType = RTPHeader.parse(from: packet)?.header.payloadType
+                    {
                         switch payloadType {
                         case 101, 102, 105, 106:
                             inboundVideoPackets.continuation.yield(packet)
@@ -578,7 +597,7 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             )
         }
         timestamp &+= UInt32(OpusCodec.frameSamples)
-        if frame.containsVoice && !configuration.isMuted {
+        if frame.containsVoice, !configuration.isMuted {
             trailingSilenceFrames = 0
             if !locallySpeaking, let audioSSRC {
                 try? await gateway.sendSpeaking(flags: 1, ssrc: audioSSRC)
@@ -679,7 +698,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             ))
             videoSequence &+= 1
             try await udp.send(packet)
-            if !fragment.marker { try? await Task.sleep(for: .microseconds(375)) }
+            if !fragment.marker {
+                try? await Task.sleep(for: .microseconds(375))
+            }
         }
         if !didLogSentVideo {
             didLogSentVideo = true
@@ -723,7 +744,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
                 return
             }
             let opened = try cipher.open(packet: packet)
-            if opened.payload.isEmpty { return }
+            if opened.payload.isEmpty {
+                return
+            }
             let streamKey = (UInt64(opened.header.payloadType) << 32) | UInt64(opened.header.ssrc)
             let isFirstStreamPacket = loggedInboundStreams.insert(streamKey).inserted
             if isFirstStreamPacket {
@@ -781,10 +804,10 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
         let newlyMissing = buffer.takeNewMissingSequences()
         let skippedGap = buffer.takeSkippedGap()
         reorderBuffers[header.ssrc] = buffer
-        if (header.payloadType == 101 || header.payloadType == 105), !newlyMissing.isEmpty {
+        if header.payloadType == 101 || header.payloadType == 105, !newlyMissing.isEmpty {
             try? await sendGenericNACK(mediaSSRC: header.ssrc, lostSequences: newlyMissing)
         }
-        if (header.payloadType == 101 || header.payloadType == 105), skippedGap {
+        if header.payloadType == 101 || header.payloadType == 105, skippedGap {
             await requestVideoKeyframe(mediaSSRC: header.ssrc, reason: "unrecovered RTP gap")
         }
         for packet in ordered {
@@ -801,12 +824,14 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
 
     private func handleRTCPPacket(header: RTCPHeader, payload: Data) async throws {
         if let nack = RTCPGenericNACK.parse(header: header, payload: payload),
-           nack.mediaSSRC == videoSSRC {
+           nack.mediaSSRC == videoSSRC
+        {
             try await retransmitVideoPackets(nack.lostSequences)
             return
         }
         if let pli = RTCPPictureLossIndication.parse(header: header, payload: payload),
-           pli.mediaSSRC == videoSSRC {
+           pli.mediaSSRC == videoSSRC
+        {
             videoEngine?.requestKeyframe()
             voiceMediaLogger.info("Remote receiver requested a local video keyframe")
         }
@@ -872,7 +897,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             data.append((identifier << 4) | UInt8(rid.count - 1))
             data.append(rid)
         }
-        while !data.count.isMultiple(of: 4) { data.append(0) }
+        while !data.count.isMultiple(of: 4) {
+            data.append(0)
+        }
         return data
     }
 
@@ -918,7 +945,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             didLogDecryptedAudio = true
             voiceMediaLogger.info("First remote Opus frame decrypted; bytes=\(opus.count)")
         }
-        if opus == Self.opusSilence { return }
+        if opus == Self.opusSilence {
+            return
+        }
         noteRemoteAudioActivity(userID: userID)
         try await audioEngine?.play(opusPacket: opus, from: userID)
         scheduledAudioPacketCount += 1
@@ -1000,7 +1029,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             }
         }
         let selectedStream = activeStreams.max { lhs, rhs in
-            if lhs.quality != rhs.quality { return lhs.quality < rhs.quality }
+            if lhs.quality != rhs.quality {
+                return lhs.quality < rhs.quality
+            }
             return (lhs.maxBitrate ?? 0) < (rhs.maxBitrate ?? 0)
         }
         var participant = participants[state.userID] ?? VoiceRemoteParticipant(userID: state.userID)
@@ -1029,7 +1060,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             }
             eventContinuation.yield(.videoStopped(userID: state.userID))
         } else if previousVideoSSRC != selectedStream?.ssrc, let mediaSSRC = selectedStream?.ssrc {
-            if let previousVideoSSRC { videoDecoders[previousVideoSSRC] = nil }
+            if let previousVideoSSRC {
+                videoDecoders[previousVideoSSRC] = nil
+            }
             await requestVideoKeyframe(mediaSSRC: mediaSSRC, reason: "remote video stream started")
         }
         let wants = Dictionary(uniqueKeysWithValues: activeStreams.map { stream in
@@ -1070,7 +1103,9 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .milliseconds(40))
                 guard !Task.isCancelled else { return }
-                if await self?.expireInactiveSpeakers() != false { return }
+                if await self?.expireInactiveSpeakers() != false {
+                    return
+                }
             }
         }
     }
@@ -1078,7 +1113,8 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
     private func expireInactiveSpeakers() -> Bool {
         let now = ContinuousClock.now
         for (userID, instant) in lastRemoteAudioActivity
-            where instant.duration(to: now) >= .milliseconds(120) {
+            where instant.duration(to: now) >= .milliseconds(120)
+        {
             lastRemoteAudioActivity[userID] = nil
             if var participant = participants[userID], participant.isSpeaking {
                 participant.isSpeaking = false
@@ -1104,7 +1140,10 @@ public actor DiscordVoiceSession: DaveSessionDelegate {
         videoDecoders[mediaSSRC] = nil
         let now = ContinuousClock.now
         if let previous = lastVideoKeyframeRequest[mediaSSRC],
-           previous.duration(to: now) < .milliseconds(500) { return }
+           previous.duration(to: now) < .milliseconds(500)
+        {
+            return
+        }
         lastVideoKeyframeRequest[mediaSSRC] = now
         try? await sendPictureLossIndication(mediaSSRC: mediaSSRC)
         voiceMediaLogger.info("Requested remote video keyframe; reason=\(reason, privacy: .public)")
@@ -1203,8 +1242,19 @@ public enum VoiceSessionError: Error, Equatable {
 }
 
 private extension VoiceAudioEngine {
-    func setMuted(_ value: Bool) { isMuted = value }
-    func setDeafened(_ value: Bool) { isDeafened = value }
-    func setInputVolume(_ value: Float) { inputVolume = value }
-    func setOutputVolume(_ value: Float) { outputVolume = value }
+    func setMuted(_ value: Bool) {
+        isMuted = value
+    }
+
+    func setDeafened(_ value: Bool) {
+        isDeafened = value
+    }
+
+    func setInputVolume(_ value: Float) {
+        inputVolume = value
+    }
+
+    func setOutputVolume(_ value: Float) {
+        outputVolume = value
+    }
 }

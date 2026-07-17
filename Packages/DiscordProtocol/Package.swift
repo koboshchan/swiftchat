@@ -12,6 +12,6 @@ let package = Package(
             dependencies: ["SwiftchatModels"],
             resources: [.process("Resources")]
         ),
-        .testTarget(name: "DiscordProtocolTests", dependencies: ["DiscordProtocol"]),
+        .testTarget(name: "DiscordProtocolTests", dependencies: ["DiscordProtocol"])
     ]
 )

@@ -36,7 +36,9 @@ struct ContinuousGatewayClock: GatewayClock {
 }
 
 struct SystemGatewayRandomSource: GatewayRandomSource {
-    func unitInterval() async -> Double { Double.random(in: 0..<1) }
+    func unitInterval() async -> Double {
+        Double.random(in: 0 ..< 1)
+    }
 }
 
 struct URLSessionGatewayTransport: GatewayTransport {
@@ -122,9 +124,9 @@ actor GatewaySession {
             identifyPayload: Data,
             token: String,
             maximumReconnectAttempts: Int = 8,
-            maximumMessageSize: Int = 16 * 1_024 * 1_024,
-            maximumCompressedBufferSize: Int = 8 * 1_024 * 1_024,
-            maximumDecompressedPayloadSize: Int = 16 * 1_024 * 1_024,
+            maximumMessageSize: Int = 16 * 1024 * 1024,
+            maximumCompressedBufferSize: Int = 8 * 1024 * 1024,
+            maximumDecompressedPayloadSize: Int = 16 * 1024 * 1024,
             backoffBase: Duration = .seconds(1),
             backoffCap: Duration = .seconds(60)
         ) {
@@ -218,7 +220,7 @@ actor GatewaySession {
         heartbeatTask = nil
         let activeSocket = socket
         socket = nil
-        await activeSocket?.close(code: 1_000)
+        await activeSocket?.close(code: 1000)
         clearResumableState()
         awaitingHeartbeatACK = false
         transition(to: .stopped)
@@ -247,7 +249,9 @@ actor GatewaySession {
         lifecycle: while isActive(activeGeneration) {
             switch nextOutcome {
             case let .reconnectImmediately(preserveSession):
-                if !preserveSession { clearResumableState() }
+                if !preserveSession {
+                    clearResumableState()
+                }
                 if isInitialConnection {
                     isInitialConnection = false
                 } else {
@@ -255,7 +259,9 @@ actor GatewaySession {
                     guard reconnectAttempts <= configuration.maximumReconnectAttempts else { break lifecycle }
                 }
             case let .reconnectAfterBackoff(preserveSession):
-                if !preserveSession { clearResumableState() }
+                if !preserveSession {
+                    clearResumableState()
+                }
                 guard await waitForReconnectBackoff(generation: activeGeneration) else { break lifecycle }
             case .invalidSessionDelay:
                 clearResumableState()
@@ -311,7 +317,7 @@ actor GatewaySession {
         }
 
         guard isActive(activeGeneration) else {
-            await activeSocket.close(code: 1_000)
+            await activeSocket.close(code: 1000)
             return .cancelled
         }
         socket = activeSocket
@@ -323,7 +329,7 @@ actor GatewaySession {
                 maximumDecompressedPayloadSize: configuration.maximumDecompressedPayloadSize
             )
         } catch {
-            await activeSocket.close(code: 4_002)
+            await activeSocket.close(code: 4002)
             socket = nil
             return .terminal(authenticationFailed: false)
         }
@@ -333,7 +339,9 @@ actor GatewaySession {
             heartbeatTask = nil
             awaitingHeartbeatACK = false
             heartbeatInterval = nil
-            if generation == activeGeneration { socket = nil }
+            if generation == activeGeneration {
+                socket = nil
+            }
         }
 
         do {
@@ -343,7 +351,7 @@ actor GatewaySession {
                 for payload in payloads {
                     let envelope = try codec.decode(payload)
                     if let outcome = try await process(envelope, generation: activeGeneration) {
-                        await activeSocket.close(code: 4_000)
+                        await activeSocket.close(code: 4000)
                         return outcome
                     }
                 }
@@ -358,7 +366,7 @@ actor GatewaySession {
             }
             if error is GatewaySessionError || error is DecodingError {
                 sessionLogger.fault("Gateway payload was malformed; stopping the session")
-                await activeSocket.close(code: 4_002)
+                await activeSocket.close(code: 4002)
                 return .terminal(authenticationFailed: false)
             }
             let closeCode = await activeSocket.closeCode()
@@ -367,7 +375,9 @@ actor GatewaySession {
     }
 
     private func process(_ envelope: GatewayEnvelope, generation activeGeneration: Int) async throws -> ConnectionOutcome? {
-        if let incomingSequence = envelope.sequence { sequence = incomingSequence }
+        if let incomingSequence = envelope.sequence {
+            sequence = incomingSequence
+        }
 
         switch envelope.op {
         case 0:
@@ -378,7 +388,8 @@ actor GatewaySession {
             if name == "READY" {
                 guard case let .object(object) = data,
                       case let .string(readySessionID)? = object["session_id"],
-                      case let .string(readyResumeURL)? = object["resume_gateway_url"] else {
+                      case let .string(readyResumeURL)? = object["resume_gateway_url"]
+                else {
                     throw GatewaySessionError.malformedPayload
                 }
                 sessionID = readySessionID
@@ -404,12 +415,15 @@ actor GatewaySession {
             guard handshakeSentGeneration != activeGeneration,
                   case let .object(hello)? = envelope.data,
                   case let .number(milliseconds)? = hello["heartbeat_interval"],
-                  milliseconds > 0 else {
-                if handshakeSentGeneration == activeGeneration { return nil }
+                  milliseconds > 0
+            else {
+                if handshakeSentGeneration == activeGeneration {
+                    return nil
+                }
                 throw GatewaySessionError.malformedPayload
             }
             handshakeSentGeneration = activeGeneration
-            let interval = Duration.seconds(milliseconds / 1_000)
+            let interval = Duration.seconds(milliseconds / 1000)
             heartbeatInterval = interval
             let initialUnit = await random.unitInterval()
             startHeartbeatLoop(
@@ -442,7 +456,7 @@ actor GatewaySession {
         let envelope = GatewayEnvelope(op: 6, data: .object([
             "token": .string(configuration.token),
             "session_id": .string(sessionID),
-            "seq": .number(Double(sequence)),
+            "seq": .number(Double(sequence))
         ]))
         try await socket?.send(codec.encode(envelope))
     }
@@ -467,7 +481,7 @@ actor GatewaySession {
         if awaitingHeartbeatACK {
             forcedOutcome = .reconnectAfterBackoff(preserveSession: true)
             let activeSocket = socket
-            await activeSocket?.close(code: 4_000)
+            await activeSocket?.close(code: 4000)
             return false
         }
         do {
@@ -476,7 +490,7 @@ actor GatewaySession {
         } catch {
             forcedOutcome = .reconnectAfterBackoff(preserveSession: true)
             let activeSocket = socket
-            await activeSocket?.close(code: 4_000)
+            await activeSocket?.close(code: 4000)
             return false
         }
     }
@@ -499,7 +513,7 @@ actor GatewaySession {
         let exponent = min(reconnectAttempts - 1, 20)
         let baseSeconds = durationSeconds(configuration.backoffBase) * pow(2, Double(exponent))
         let cappedSeconds = min(baseSeconds, durationSeconds(configuration.backoffCap))
-        let jitter = 0.8 + (max(0, min(await random.unitInterval(), 0.999_999)) * 0.4)
+        let jitter = await 0.8 + (max(0, min(random.unitInterval(), 0.999_999)) * 0.4)
         do {
             try await clock.sleep(for: .seconds(cappedSeconds * jitter))
             return isActive(activeGeneration)
@@ -510,14 +524,14 @@ actor GatewaySession {
 
     private func classify(closeCode: Int?) -> ConnectionOutcome {
         switch closeCode {
-        case 4_004:
-            return .terminal(authenticationFailed: true)
-        case 4_001, 4_002, 4_003, 4_005, 4_010, 4_011, 4_012, 4_013, 4_014:
-            return .terminal(authenticationFailed: false)
-        case 1_000, 1_001, 4_007, 4_009:
-            return .reconnectAfterBackoff(preserveSession: false)
+        case 4004:
+            .terminal(authenticationFailed: true)
+        case 4001, 4002, 4003, 4005, 4010, 4011, 4012, 4013, 4014:
+            .terminal(authenticationFailed: false)
+        case 1000, 1001, 4007, 4009:
+            .reconnectAfterBackoff(preserveSession: false)
         default:
-            return .reconnectAfterBackoff(preserveSession: true)
+            .reconnectAfterBackoff(preserveSession: true)
         }
     }
 
@@ -615,20 +629,19 @@ private final class GatewayZlibStreamDecoder {
             let frameEnd = range.upperBound
             let frame = Data(compressedBuffer[..<frameEnd])
             compressedBuffer.removeSubrange(..<frameEnd)
-            payloads.append(try decompress(frame))
+            try payloads.append(decompress(frame))
         }
         return payloads
     }
 
     private func decompress(_ frame: Data) throws -> Data {
         var output = Data()
-        let sourceFrame: Data
-        if frame.starts(with: [0x78, 0x9C]) || frame.starts(with: [0x78, 0xDA]) || frame.starts(with: [0x78, 0x01]) {
-            sourceFrame = Data(frame.dropFirst(2))
+        let sourceFrame: Data = if frame.starts(with: [0x78, 0x9C]) || frame.starts(with: [0x78, 0xDA]) || frame.starts(with: [0x78, 0x01]) {
+            Data(frame.dropFirst(2))
         } else {
-            sourceFrame = frame
+            frame
         }
-        let destinationCapacity = 64 * 1_024
+        let destinationCapacity = 64 * 1024
         let destination = UnsafeMutablePointer<UInt8>.allocate(capacity: destinationCapacity)
         defer { destination.deallocate() }
 
@@ -653,7 +666,9 @@ private final class GatewayZlibStreamDecoder {
                 if status == COMPRESSION_STATUS_ERROR, produced == 0, stream.src_size > 0 {
                     throw GatewaySessionError.decompressionFailed
                 }
-                if status == COMPRESSION_STATUS_END { break }
+                if status == COMPRESSION_STATUS_END {
+                    break
+                }
             } while stream.src_size > 0 || stream.dst_size == 0
         }
         return output

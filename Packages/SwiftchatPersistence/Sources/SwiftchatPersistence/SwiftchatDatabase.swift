@@ -1,6 +1,6 @@
-import SwiftchatModels
 import Foundation
 import GRDB
+import SwiftchatModels
 
 public actor SwiftchatDatabase {
     private let queue: DatabaseQueue
@@ -19,7 +19,9 @@ public actor SwiftchatDatabase {
 
     public func save(messages: [Message]) throws {
         try queue.write { db in
-            for message in messages { try MessageRecord(message).save(db) }
+            for message in messages {
+                try MessageRecord(message).save(db)
+            }
         }
     }
 
@@ -114,7 +116,9 @@ private struct MessageRecord: Codable, FetchableRecord, PersistableRecord {
         payload = try JSONEncoder().encode(message)
     }
 
-    func message() throws -> Message { try JSONDecoder().decode(Message.self, from: payload) }
+    func message() throws -> Message {
+        try JSONDecoder().decode(Message.self, from: payload)
+    }
 }
 
 private struct DraftRecord: Codable, FetchableRecord, PersistableRecord {

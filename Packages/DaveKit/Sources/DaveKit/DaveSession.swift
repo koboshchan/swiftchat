@@ -4,7 +4,7 @@ import Foundation
 class DaveSession {
     private let sessionHandle: DAVESessionHandle
     init() {
-        sessionHandle = daveSessionCreate(nil, nil, { _, _, _ in }, nil);
+        sessionHandle = daveSessionCreate(nil, nil, { _, _, _ in }, nil)
     }
 
     deinit {
@@ -12,15 +12,15 @@ class DaveSession {
     }
 
     func getKeyRatchet(userId: String) -> KeyRatchet {
-        KeyRatchet(handle: daveSessionGetKeyRatchet(self.sessionHandle, userId))
+        KeyRatchet(handle: daveSessionGetKeyRatchet(sessionHandle, userId))
     }
 
     func reset() {
-        daveSessionReset(self.sessionHandle)
+        daveSessionReset(sessionHandle)
     }
 
     func setProtocolVersion(_ version: UInt16) {
-        daveSessionSetProtocolVersion(self.sessionHandle, version)
+        daveSessionSetProtocolVersion(sessionHandle, version)
     }
 
     func setExternalSenderPackage(externalSenderPackage: Data) {
@@ -29,22 +29,22 @@ class DaveSession {
             daveSessionSetExternalSender(
                 self.sessionHandle,
                 externalSenderPackage.baseAddress,
-                externalSenderPackage.count,
+                externalSenderPackage.count
             )
         }
     }
 
     func initialize(version: UInt16, groupId: UInt64, selfUserId: String) {
-        daveSessionInit(self.sessionHandle, version, groupId, selfUserId)
+        daveSessionInit(sessionHandle, version, groupId, selfUserId)
     }
 
     func getKeyPackage() -> Data {
-        var outputLength: Int = 0
+        var outputLength = 0
         var data: UnsafeMutablePointer<UInt8>?
         daveSessionGetMarshalledKeyPackage(
-            self.sessionHandle,
+            sessionHandle,
             &data,
-            &outputLength,
+            &outputLength
         )
 
         guard let data else { return Data() }
@@ -53,7 +53,7 @@ class DaveSession {
     }
 
     func getProtocolVersion() -> UInt16 {
-        return daveSessionGetProtocolVersion(self.sessionHandle)
+        daveSessionGetProtocolVersion(sessionHandle)
     }
 
     func processProposals(proposals: Data, knownUserIds: [String]) -> Data? {
@@ -69,7 +69,7 @@ class DaveSession {
                     knownUserIds.baseAddress,
                     knownUserIds.count,
                     &welcomeData,
-                    &welcomeDataLength,
+                    &welcomeDataLength
                 )
             }
         }
@@ -88,12 +88,12 @@ class DaveSession {
                     welcome.baseAddress,
                     welcome.count,
                     knownUserIds.baseAddress,
-                    knownUserIds.count,
+                    knownUserIds.count
                 )
             }
         }
 
-        if let result = result {
+        if let result {
             return Welcome(handle: result)
         } else {
             return nil
@@ -106,11 +106,11 @@ class DaveSession {
             return daveSessionProcessCommit(
                 self.sessionHandle,
                 commit.baseAddress!,
-                commit.count,
+                commit.count
             )
         }
 
-        if let handle = handle {
+        if let handle {
             return Commit(handle: handle)
         } else {
             return nil

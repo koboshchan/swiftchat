@@ -55,7 +55,8 @@ struct ChannelSidebarView: View {
 
         if let channelID = activeVoiceChannelID,
            let currentUserID,
-           statesByChannel[channelID]?[currentUserID] == nil {
+           statesByChannel[channelID]?[currentUserID] == nil
+        {
             statesByChannel[channelID, default: [:]][currentUserID] = VoiceParticipantState(
                 userID: currentUserID,
                 channelID: channelID,
@@ -82,7 +83,9 @@ struct ChannelSidebarView: View {
                 isVideoEnabled: state.isVideoEnabled
             )
         }.sorted {
-            if $0.isCurrentUser != $1.isCurrentUser { return $0.isCurrentUser }
+            if $0.isCurrentUser != $1.isCurrentUser {
+                return $0.isCurrentUser
+            }
             return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }}
     }
@@ -149,8 +152,12 @@ struct ChannelGroup: Identifiable {
             result[index].channels.sort(by: channelOrder)
         }
         return result.sorted { lhs, rhs in
-            if lhs.name == nil, rhs.name != nil { return true }
-            if lhs.name != nil, rhs.name == nil { return false }
+            if lhs.name == nil, rhs.name != nil {
+                return true
+            }
+            if lhs.name != nil, rhs.name == nil {
+                return false
+            }
             return lhs.position < rhs.position
         }
     }
@@ -158,8 +165,12 @@ struct ChannelGroup: Identifiable {
     private static func channelOrder(_ lhs: Channel, _ rhs: Channel) -> Bool {
         let lhsIsVoice = lhs.kind == .voice
         let rhsIsVoice = rhs.kind == .voice
-        if lhsIsVoice != rhsIsVoice { return !lhsIsVoice }
-        if lhs.position != rhs.position { return lhs.position < rhs.position }
+        if lhsIsVoice != rhsIsVoice {
+            return !lhsIsVoice
+        }
+        if lhs.position != rhs.position {
+            return lhs.position < rhs.position
+        }
         return lhs.id < rhs.id
     }
 }
@@ -316,13 +327,19 @@ private struct AccountControlView: View {
     }
 
     private var displayName: String {
-        if isOfflineTesting { return "Offline Testing" }
+        if isOfflineTesting {
+            return "Offline Testing"
+        }
         return isAuthenticated ? (user?.displayName ?? "Discord Account") : "Connect Account"
     }
 
     private var accountSubtitle: String {
-        if isOfflineTesting { return "Mock data • networking disabled" }
-        if isAuthenticated { return user.map { "@\($0.username)" } ?? connectionState.rawValue }
+        if isOfflineTesting {
+            return "Mock data • networking disabled"
+        }
+        if isAuthenticated {
+            return user.map { "@\($0.username)" } ?? connectionState.rawValue
+        }
         return "Sign in to Discord"
     }
 }
@@ -361,8 +378,11 @@ private struct AccountMenu: View {
                         Button {
                             Task { await updateStatus(status) }
                         } label: {
-                            if status == currentStatus { Label(status.label, systemImage: "checkmark") }
-                            else { Text(status.label) }
+                            if status == currentStatus {
+                                Label(status.label, systemImage: "checkmark")
+                            } else {
+                                Text(status.label)
+                            }
                         }
                     }
                 }

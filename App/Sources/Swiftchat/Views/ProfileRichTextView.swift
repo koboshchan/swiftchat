@@ -13,7 +13,7 @@ struct ProfileRichTextView: View {
                     let fileExtension = emoji.isAnimated ? "gif" : "png"
                     guard let url = URL(string: "https://cdn.discordapp.com/emojis/\(emoji.id).\(fileExtension)?size=48&quality=lossless"),
                           let (data, response) = try? await URLSession.shared.data(from: url),
-                          (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) != false,
+                          (response as? HTTPURLResponse).map({ 200 ..< 300 ~= $0.statusCode }) != false,
                           let image = NSImage(data: data) else { continue }
                     emojiImages[emoji.id] = image
                 }
@@ -42,7 +42,7 @@ struct ProfileStatusTextView: View {
                 let fileExtension = emoji.isAnimated ? "gif" : "png"
                 guard let url = URL(string: "https://cdn.discordapp.com/emojis/\(emoji.id).\(fileExtension)?size=48&quality=lossless"),
                       let (data, response) = try? await URLSession.shared.data(from: url),
-                      (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) != false,
+                      (response as? HTTPURLResponse).map({ 200 ..< 300 ~= $0.statusCode }) != false,
                       let image = NSImage(data: data) else { continue }
                 emojiImages[emoji.id] = image
             }
@@ -152,7 +152,7 @@ private struct ProfileStatusTextRepresentable: NSViewRepresentable {
             string: text,
             attributes: [
                 .font: NSFont.systemFont(ofSize: fontSize),
-                .foregroundColor: usesSecondaryColor ? NSColor.secondaryLabelColor : NSColor.labelColor,
+                .foregroundColor: usesSecondaryColor ? NSColor.secondaryLabelColor : NSColor.labelColor
             ]
         )
     }
@@ -162,7 +162,9 @@ private struct ProfileTextRepresentable: NSViewRepresentable {
     let source: String
     let emojiImages: [String: NSImage]
 
-    func makeCoordinator() -> Coordinator { Coordinator() }
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
 
     func makeNSView(context: Context) -> HoverLinkTextView {
         let textView = HoverLinkTextView()
@@ -177,7 +179,7 @@ private struct ProfileTextRepresentable: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.linkTextAttributes = [
             .foregroundColor: NSColor.systemBlue,
-            .underlineStyle: 0,
+            .underlineStyle: 0
         ]
         return textView
     }
@@ -239,7 +241,7 @@ private struct ProfileTextRepresentable: NSViewRepresentable {
             string: text,
             attributes: [
                 .font: NSFont.systemFont(ofSize: 14),
-                .foregroundColor: NSColor.labelColor,
+                .foregroundColor: NSColor.labelColor
             ]
         )
     }
@@ -280,7 +282,9 @@ private final class HoverLinkTextView: NSTextView {
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
-        if let tracking { removeTrackingArea(tracking) }
+        if let tracking {
+            removeTrackingArea(tracking)
+        }
         let tracking = NSTrackingArea(
             rect: bounds,
             options: [.activeInKeyWindow, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect],

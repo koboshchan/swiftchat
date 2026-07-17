@@ -11,7 +11,7 @@ public actor DaveSessionManager {
     private static let DISABLED_PROTOCOL_VERSION = 0
     private static let MLS_NEW_GROUP_EXPECTED_EPOCH = "1"
 
-    // Static property initializer to set up logging only once, even across multiple instances
+    /// Static property initializer to set up logging only once, even across multiple instances
     private static let setupLogging: Void = {
         daveSetLogSinkCallback(logSyncCallback)
     }()
@@ -24,7 +24,7 @@ public actor DaveSessionManager {
     private let session: DaveSession
     private let encryptor: Encryptor
     private var decryptors: [String: Decryptor] = [:]
-    
+
     private var lastPreparedTransitionVersion: UInt16 = 0
     private var preparedTransitions: [UInt16: UInt16] = [:]
 
@@ -35,7 +35,7 @@ public actor DaveSessionManager {
     public init(
         selfUserId: String,
         groupId: UInt64,
-        delegate: DaveSessionDelegate,
+        delegate: DaveSessionDelegate
     ) {
         self.selfUserId = selfUserId
         self.groupId = groupId
@@ -50,8 +50,8 @@ public actor DaveSessionManager {
 
     // MARK: - Static (informational) Methods
 
-    public static nonisolated func maxSupportedProtocolVersion() -> UInt16 {
-        return daveMaxSupportedProtocolVersion()
+    public nonisolated static func maxSupportedProtocolVersion() -> UInt16 {
+        daveMaxSupportedProtocolVersion()
     }
 
     // MARK: - User Management
@@ -59,7 +59,7 @@ public actor DaveSessionManager {
     public func addUser(userId: String) {
         guard decryptors[userId] == nil else { return }
         decryptors[userId] = Decryptor()
-        setupKeyRatchetForUser(userId: userId, protocolVersion: self.lastPreparedTransitionVersion)
+        setupKeyRatchetForUser(userId: userId, protocolVersion: lastPreparedTransitionVersion)
         daveProtocolLogger.info("DAVE participant added; participantCount=\(self.decryptors.count)")
     }
 
@@ -72,9 +72,9 @@ public actor DaveSessionManager {
     public func encrypt(
         ssrc: UInt32,
         data: Data,
-        mediaType: DaveMediaType = .audio,
+        mediaType: DaveMediaType = .audio
     ) throws(EncryptError) -> Data {
-        return try encryptor.encrypt(ssrc: ssrc, data: data, mediaType: mediaType)
+        try encryptor.encrypt(ssrc: ssrc, data: data, mediaType: mediaType)
     }
 
     public func assignAudioSSRC(_ ssrc: UInt32) {
@@ -88,7 +88,7 @@ public actor DaveSessionManager {
     public func decrypt(
         userId: String,
         data: Data,
-        mediaType: DaveMediaType = .audio,
+        mediaType: DaveMediaType = .audio
     ) throws(DecryptError) -> Data? {
         guard let decryptor = decryptors[userId] else {
             daveProtocolLogger.warning("DAVE decrypt skipped because participant ratchet is unavailable")
@@ -100,25 +100,25 @@ public actor DaveSessionManager {
 
     // MARK: - Incoming Voice Gateway Requests
 
-    // Opcode SELECT_PROTOCOL_ACK (1)
+    /// Opcode SELECT_PROTOCOL_ACK (1)
     public func selectProtocol(protocolVersion: UInt16) async {
         daveProtocolLogger.info("DAVE protocol selected; version=\(protocolVersion)")
-        if (protocolVersion > Self.DISABLED_PROTOCOL_VERSION) {
+        if protocolVersion > Self.DISABLED_PROTOCOL_VERSION {
             await prepareEpoch(
                 transitionId: Self.INIT_TRANSITION_ID,
                 epoch: Self.MLS_NEW_GROUP_EXPECTED_EPOCH,
-                protocolVersion: protocolVersion,
+                protocolVersion: protocolVersion
             )
         } else {
             await prepareTransition(
                 transitionId: Self.INIT_TRANSITION_ID,
-                protocolVersion: protocolVersion,
+                protocolVersion: protocolVersion
             )
             executeTransition(transitionId: Self.INIT_TRANSITION_ID)
         }
     }
 
-    // Opcode DAVE_PROTOCOL_PREPARE_TRANSITION (21)
+    /// Opcode DAVE_PROTOCOL_PREPARE_TRANSITION (21)
     public func prepareTransition(transitionId: UInt16, protocolVersion: UInt16) async {
         daveProtocolLogger.info(
             "DAVE transition prepared; id=\(transitionId), version=\(protocolVersion), participants=\(self.decryptors.count)"
@@ -140,7 +140,7 @@ public actor DaveSessionManager {
         }
     }
 
-    // Opcode DAVE_PROTOCOL_EXECUTE_TRANSITION (22)
+    /// Opcode DAVE_PROTOCOL_EXECUTE_TRANSITION (22)
     public func executeTransition(transitionId: UInt16) {
         guard let protocolVersion = preparedTransitions.removeValue(forKey: transitionId) else {
             daveProtocolLogger.warning("DAVE execute ignored because transition was not prepared; id=\(transitionId)")
@@ -148,14 +148,14 @@ public actor DaveSessionManager {
         }
 
         if protocolVersion == Self.DISABLED_PROTOCOL_VERSION {
-            self.session.reset()
+            session.reset()
         }
 
         setupKeyRatchetForEncryptor(protocolVersion: protocolVersion)
         daveProtocolLogger.info("DAVE transition executed; id=\(transitionId), version=\(protocolVersion)")
     }
 
-    // Opcode DAVE_PROTOCOL_PREPARE_EPOCH (24)
+    /// Opcode DAVE_PROTOCOL_PREPARE_EPOCH (24)
     public func prepareEpoch(
         transitionId: UInt16,
         epoch: String,
@@ -180,22 +180,22 @@ public actor DaveSessionManager {
         await prepareTransition(transitionId: transitionId, protocolVersion: protocolVersion)
     }
 
-    // Opcode MLS_EXTERNAL_SENDER_PACKAGE (25)
+    /// Opcode MLS_EXTERNAL_SENDER_PACKAGE (25)
     public func mlsExternalSenderPackage(externalSenderPackage: Data) {
         daveProtocolLogger.info("DAVE external sender received; bytes=\(externalSenderPackage.count)")
         session.setExternalSenderPackage(externalSenderPackage: externalSenderPackage)
     }
 
-    // Opcode MLS_PROPOSALS (27)
+    /// Opcode MLS_PROPOSALS (27)
     public func mlsProposals(proposals: Data) async {
         daveProtocolLogger.info("DAVE proposals received; bytes=\(proposals.count)")
         let welcome = session.processProposals(proposals: proposals, knownUserIds: knownUserIds)
-        if let welcome = welcome {
+        if let welcome {
             await delegate?.mlsCommitWelcome(welcome: welcome)
         }
     }
 
-    // Opcode MLS_PREPARE_COMMIT_TRANSITION (29)
+    /// Opcode MLS_PREPARE_COMMIT_TRANSITION (29)
     public func mlsPrepareCommitTransition(transitionId: UInt16, commit: Data) async {
         daveProtocolLogger.info("DAVE commit received; id=\(transitionId), bytes=\(commit.count)")
         let commit = session.processCommit(commit: commit)
@@ -213,12 +213,12 @@ public actor DaveSessionManager {
         await prepareTransition(transitionId: transitionId, protocolVersion: session.getProtocolVersion())
     }
 
-    // Opcode MLS_WELCOME (30)
+    /// Opcode MLS_WELCOME (30)
     public func mlsWelcome(transitionId: UInt16, welcome: Data) async {
         daveProtocolLogger.info("DAVE welcome received; id=\(transitionId), bytes=\(welcome.count)")
         let welcome = session.processWelcome(
             welcome: welcome,
-            knownUserIds: knownUserIds,
+            knownUserIds: knownUserIds
         )
         guard welcome != nil else {
             await delegate?.mlsInvalidCommitWelcome(transitionId: transitionId)
@@ -228,14 +228,14 @@ public actor DaveSessionManager {
 
         await prepareTransition(
             transitionId: transitionId,
-            protocolVersion: session.getProtocolVersion(),
+            protocolVersion: session.getProtocolVersion()
         )
     }
 
     // MARK: - Private Methods
 
     private var knownUserIds: [String] {
-        return Array(decryptors.keys) + [selfUserId]
+        Array(decryptors.keys) + [selfUserId]
     }
 
     private func setupKeyRatchetForEncryptor(protocolVersion: UInt16) {
@@ -245,10 +245,10 @@ public actor DaveSessionManager {
         }
 
         encryptor.setPassthroughMode(enabled: false)
-        encryptor.setKeyRatchet(keyRatchet: session.getKeyRatchet(userId: self.selfUserId))
+        encryptor.setKeyRatchet(keyRatchet: session.getKeyRatchet(userId: selfUserId))
     }
 
-    private func setupKeyRatchetForUser(userId: String, protocolVersion: UInt16) {        
+    private func setupKeyRatchetForUser(userId: String, protocolVersion: UInt16) {
         guard let decryptor = decryptors[userId] else {
             return
         }

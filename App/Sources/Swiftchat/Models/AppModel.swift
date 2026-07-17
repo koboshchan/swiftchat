@@ -1,10 +1,10 @@
-import DiscordProtocol
-import SwiftchatModels
-import SwiftchatPersistence
 import CoreAudio
+import DiscordProtocol
 import Foundation
 import MediaPipeline
 import Observation
+import SwiftchatModels
+import SwiftchatPersistence
 
 @MainActor
 @Observable
@@ -27,13 +27,17 @@ final class AppModel {
     private(set) var messages: [Message] = [] {
         didSet {
             messageRows = MessageGrouping.rows(for: messages)
-            if let selectedChannelID { messageCache[selectedChannelID] = messages }
+            if let selectedChannelID {
+                messageCache[selectedChannelID] = messages
+            }
         }
     }
+
     private(set) var messageRows: [MessageRowPresentation] = []
     private(set) var members: [Member] = [] {
         didSet { memberSections = MemberSection.make(from: members) }
     }
+
     private(set) var memberSections: [MemberSection] = []
     private(set) var currentStatus: PresenceStatus = .offline
     private(set) var connectionState: ConnectionState = .disconnected
@@ -78,12 +82,15 @@ final class AppModel {
     var selectedChannelID: ChannelID? {
         didSet {
             guard selectedChannelID != oldValue else { return }
-            if let oldValue { lastTypingRequestAt[oldValue] = nil }
+            if let oldValue {
+                lastTypingRequestAt[oldValue] = nil
+            }
             selectedChannel = snapshot?.channels.first { $0.id == selectedChannelID }
                 ?? visibleChannels.first { $0.id == selectedChannelID }
             beginSelectedChannelLoad()
         }
     }
+
     var draft = ""
     var showInspector = true
     var showQuickSwitcher = false
@@ -153,8 +160,13 @@ final class AppModel {
             : try? SwiftchatDatabase(inMemory: true)
     }
 
-    var isOfflineTesting: Bool { launchMode == .offlineTesting }
-    var isDiscordNetworkingDisabled: Bool { discordNetworkDisabled }
+    var isOfflineTesting: Bool {
+        launchMode == .offlineTesting
+    }
+
+    var isDiscordNetworkingDisabled: Bool {
+        discordNetworkDisabled
+    }
 
     func connectAuthenticatedAccount(
         _ handle: CredentialHandle,
@@ -169,7 +181,9 @@ final class AppModel {
         eventTask?.cancel()
         stopLocalTyping(clearThrottle: true)
         typingState.clearAll()
-        if !preservesInteractivePresentation { sessionState = .connecting }
+        if !preservesInteractivePresentation {
+            sessionState = .connecting
+        }
         let fingerprint = await UserDefaultsDiscordFingerprintStore.shared.load()
         provider = authenticatedProviderFactory(handle, fingerprint)
         credentialHandle = handle
@@ -237,7 +251,9 @@ final class AppModel {
         isAuthenticated = false
         didAttemptSessionRestore = true
         sessionState = launchMode == .offlineTesting ? .connecting : .signedOut
-        if launchMode == .offlineTesting { await start() }
+        if launchMode == .offlineTesting {
+            await start()
+        }
     }
 
     func start(publishesSessionState: Bool = true) async {
@@ -252,7 +268,8 @@ final class AppModel {
             didAttemptSessionRestore = true
             if restoresStoredSession,
                let handles = try? await KeychainCredentialStore().handles(),
-               let handle = handles.first {
+               let handle = handles.first
+            {
                 _ = await connectAuthenticatedAccount(handle)
                 return
             }
@@ -262,7 +279,9 @@ final class AppModel {
             sessionState = .signedOut
             return
         }
-        if publishesSessionState { sessionState = .connecting }
+        if publishesSessionState {
+            sessionState = .connecting
+        }
         let stream = await provider.eventStream()
         eventTask = Task { [weak self] in
             for await event in stream {
@@ -275,17 +294,23 @@ final class AppModel {
         do {
             let value = try await provider.bootstrap()
             snapshot = value
-            if credentialHandle != nil { isAuthenticated = true }
+            if credentialHandle != nil {
+                isAuthenticated = true
+            }
             members = value.members
             currentStatus = await provider.currentStatus()
             await activateGuild(value.guilds.first?.id)
             await channelLoadTask?.value
-            if publishesSessionState { sessionState = .workspace }
+            if publishesSessionState {
+                sessionState = .workspace
+            }
         } catch {
             errorMessage = error.localizedDescription
             if launchMode == .normal {
                 isAuthenticated = false
-                if publishesSessionState { sessionState = .signedOut }
+                if publishesSessionState {
+                    sessionState = .signedOut
+                }
             }
         }
     }
@@ -358,8 +383,11 @@ final class AppModel {
     }
 
     func toggleFavoriteEmoji(_ key: String) {
-        if favoriteEmojiKeys.contains(key) { favoriteEmojiKeys.remove(key) }
-        else { favoriteEmojiKeys.insert(key) }
+        if favoriteEmojiKeys.contains(key) {
+            favoriteEmojiKeys.remove(key)
+        } else {
+            favoriteEmojiKeys.insert(key)
+        }
         if persistsEmojiPreferences {
             UserDefaults.standard.set(Array(favoriteEmojiKeys), forKey: "dev.swiftchat.favorite-emojis")
         }
@@ -367,7 +395,9 @@ final class AppModel {
 
     func composerText(for emoji: DiscordEmoji) -> String {
         let hasNitro = (snapshot?.currentUser.premiumType ?? 0) > 0
-        if emoji.guildID != selectedGuildID, !hasNitro { return emoji.linkedImageMarkdown }
+        if emoji.guildID != selectedGuildID, !hasNitro {
+            return emoji.linkedImageMarkdown
+        }
         return emoji.messageToken
     }
 
@@ -419,17 +449,23 @@ final class AppModel {
 
         let cached = await cachedMessages
         guard isCurrentLoad(channelID, generation: generation) else { return }
-        if messages.isEmpty, !cached.isEmpty { messages = cached }
+        if messages.isEmpty, !cached.isEmpty {
+            messages = cached
+        }
 
         let savedDraft = await storedDraft
         guard isCurrentLoad(channelID, generation: generation) else { return }
-        if draft.isEmpty { draft = savedDraft }
+        if draft.isEmpty {
+            draft = savedDraft
+        }
 
         do {
             let page = try await freshPage
             guard isCurrentLoad(channelID, generation: generation) else { return }
             let merged = Self.merging(current: messages, fresh: page.messages)
-            if merged != messages { messages = merged }
+            if merged != messages {
+                messages = merged
+            }
             hasMoreMessages = page.hasMoreBefore
             hasMoreCache[channelID] = page.hasMoreBefore
             messageLoadError = nil
@@ -447,13 +483,19 @@ final class AppModel {
     func loadEarlier() async {
         guard let channelID = selectedChannelID, let first = messages.first, hasMoreMessages, !isLoadingEarlier else { return }
         isLoadingEarlier = true
-        defer { if selectedChannelID == channelID { isLoadingEarlier = false } }
+        defer {
+            if selectedChannelID == channelID {
+                isLoadingEarlier = false
+            }
+        }
         do {
             let page = try await provider.messages(in: channelID, before: first.id, limit: 50)
             guard !Task.isCancelled, selectedChannelID == channelID else { return }
             let existingIDs = Set(messages.lazy.map(\.id))
             let earlier = page.messages.filter { !existingIDs.contains($0.id) }
-            if !earlier.isEmpty { messages.insert(contentsOf: earlier, at: 0) }
+            if !earlier.isEmpty {
+                messages.insert(contentsOf: earlier, at: 0)
+            }
             hasMoreMessages = page.hasMoreBefore
             hasMoreCache[channelID] = page.hasMoreBefore
             messageLoadError = nil
@@ -493,11 +535,14 @@ final class AppModel {
         guard !value.isEmpty,
               connectionState == .ready,
               let channel = selectedChannel,
-              Self.supportsTyping(channel.kind) else {
+              Self.supportsTyping(channel.kind)
+        else {
             stopLocalTyping(clearThrottle: value.isEmpty)
             return
         }
-        if localTypingTask != nil, localTypingChannelID == channel.id { return }
+        if localTypingTask != nil, localTypingChannelID == channel.id {
+            return
+        }
         stopLocalTyping(clearThrottle: false)
         localTypingGeneration &+= 1
         let generation = localTypingGeneration
@@ -542,8 +587,12 @@ final class AppModel {
         localTypingTask?.cancel()
         localTypingTask = nil
         if clearThrottle {
-            if let localTypingChannelID { lastTypingRequestAt[localTypingChannelID] = nil }
-            if let selectedChannelID { lastTypingRequestAt[selectedChannelID] = nil }
+            if let localTypingChannelID {
+                lastTypingRequestAt[localTypingChannelID] = nil
+            }
+            if let selectedChannelID {
+                lastTypingRequestAt[selectedChannelID] = nil
+            }
         }
         localTypingChannelID = nil
     }
@@ -587,23 +636,26 @@ final class AppModel {
             try await database?.save(messages: [confirmed])
             return true
         } catch {
-            if let index = messages.firstIndex(where: { $0.nonce == outgoing.nonce }) { messages[index].outboxState = .failed }
+            if let index = messages.firstIndex(where: { $0.nonce == outgoing.nonce }) {
+                messages[index].outboxState = .failed
+            }
             errorMessage = error.localizedDescription
             return false
         }
     }
 
     func edit(_ message: Message, content: String) async {
-        do { reconcile(try await provider.edit(messageID: message.id, channelID: message.channelID, content: content)) }
+        do { try await reconcile(provider.edit(messageID: message.id, channelID: message.channelID, content: content)) }
         catch { errorMessage = error.localizedDescription }
     }
 
     func delete(_ message: Message) async {
         do {
             try await provider.delete(messageID: message.id, channelID: message.channelID)
-            if replyingTo?.id == message.id { replyingTo = nil }
-        }
-        catch { errorMessage = error.localizedDescription }
+            if replyingTo?.id == message.id {
+                replyingTo = nil
+            }
+        } catch { errorMessage = error.localizedDescription }
     }
 
     func toggleReaction(_ emoji: String, on message: Message) async {
@@ -629,7 +681,10 @@ final class AppModel {
     func joinVoice(_ channel: Channel) async {
         guard channel.kind == .voice else { return }
         if activeVoiceChannel?.id == channel.id,
-           voiceSessionState == .connected || voiceSessionState == .connecting { return }
+           voiceSessionState == .connected || voiceSessionState == .connecting
+        {
+            return
+        }
         await leaveVoice()
         activeVoiceChannel = channel
         voiceSessionState = .connecting
@@ -683,7 +738,9 @@ final class AppModel {
         voiceParticipants = []
         isLocallySpeaking = false
         voiceVideoFrames = [:]
-        if let ownUserID = snapshot?.currentUser.id { voiceStates[ownUserID] = nil }
+        if let ownUserID = snapshot?.currentUser.id {
+            voiceStates[ownUserID] = nil
+        }
         voiceEncryptionVersion = nil
         voiceLatencyMilliseconds = nil
         voiceSessionState = .idle
@@ -809,7 +866,8 @@ final class AppModel {
 
     private func resolvedInputDeviceID() -> AudioDeviceID? {
         if let storedUID = UserDefaults.standard.string(forKey: "voiceInputDeviceUID"),
-           !storedUID.isEmpty {
+           !storedUID.isEmpty
+        {
             return mediaDevices.audioInputs.first(where: { $0.uid == storedUID })?.id
         }
 
@@ -817,7 +875,8 @@ final class AppModel {
         // Automatic capture must not inherit a Bluetooth call route or a
         // silent virtual/aggregate device. Explicit selections remain honored.
         if defaultInput?.isBluetooth == true || defaultInput?.isVirtual == true,
-           let builtIn = mediaDevices.audioInputs.first(where: \.isBuiltIn) {
+           let builtIn = mediaDevices.audioInputs.first(where: \.isBuiltIn)
+        {
             return builtIn.id
         }
         return nil
@@ -929,7 +988,9 @@ final class AppModel {
             return
         }
         isInspectorProfilePresented = true
-        if selectedMember?.id == member.id { return }
+        if selectedMember?.id == member.id {
+            return
+        }
         presentProfile(for: member)
     }
 
@@ -961,7 +1022,9 @@ final class AppModel {
                 guard !Task.isCancelled, selectedMember?.id == member.id else { return }
                 profileErrorMessage = error.localizedDescription
             }
-            if selectedMember?.id == member.id { isLoadingProfile = false }
+            if selectedMember?.id == member.id {
+                isLoadingProfile = false
+            }
         }
     }
 
@@ -975,14 +1038,16 @@ final class AppModel {
         isInspectorProfilePresented = false
     }
 
-    func dismissError() { errorMessage = nil }
+    func dismissError() {
+        errorMessage = nil
+    }
 
     private func storedMessages(in channelID: ChannelID) async -> [Message] {
-        (try? await database?.messages(in: channelID)) ?? []
+        await (try? database?.messages(in: channelID)) ?? []
     }
 
     private func storedDraft(in channelID: ChannelID) async -> String {
-        (try? await database?.draft(channelID: channelID)) ?? ""
+        await (try? database?.draft(channelID: channelID)) ?? ""
     }
 
     private func isCurrentLoad(_ channelID: ChannelID, generation: Int) -> Bool {
@@ -991,7 +1056,9 @@ final class AppModel {
 
     private static func merging(current: [Message], fresh: [Message]) -> [Message] {
         var byID: [MessageID: Message] = [:]
-        for message in current { byID[message.id] = message }
+        for message in current {
+            byID[message.id] = message
+        }
         for message in fresh {
             var resolved = message
             if let existing = byID[message.id] {
@@ -1001,7 +1068,9 @@ final class AppModel {
             byID[resolved.id] = resolved
         }
         return byID.values.sorted { lhs, rhs in
-            if lhs.timestamp != rhs.timestamp { return lhs.timestamp < rhs.timestamp }
+            if lhs.timestamp != rhs.timestamp {
+                return lhs.timestamp < rhs.timestamp
+            }
             return lhs.id < rhs.id
         }
     }
@@ -1017,15 +1086,23 @@ final class AppModel {
         case let .messageCreated(message):
             typingState.clear(userID: message.author.id, in: message.channelID)
             persist(message)
-            if message.channelID == selectedChannelID { reconcile(message) }
-            else { cache(message) }
+            if message.channelID == selectedChannelID {
+                reconcile(message)
+            } else {
+                cache(message)
+            }
         case let .messageUpdated(message):
             persist(message)
-            if message.channelID == selectedChannelID { reconcile(message) }
-            else { cache(message) }
+            if message.channelID == selectedChannelID {
+                reconcile(message)
+            } else {
+                cache(message)
+            }
         case let .messageDeleted(channelID, messageID):
             Task { try? await database?.deleteMessage(messageID) }
-            if replyingTo?.id == messageID { replyingTo = nil }
+            if replyingTo?.id == messageID {
+                replyingTo = nil
+            }
             if channelID == selectedChannelID {
                 messages.removeAll { $0.id == messageID }
             } else {
@@ -1044,9 +1121,14 @@ final class AppModel {
                 self.selectedMember = updated
             }
         case let .voiceStateChanged(state):
-            if state.channelID == nil { voiceStates[state.userID] = nil }
-            else { voiceStates[state.userID] = state }
-            if !state.isVideoEnabled { voiceVideoFrames[String(state.userID.rawValue)] = nil }
+            if state.channelID == nil {
+                voiceStates[state.userID] = nil
+            } else {
+                voiceStates[state.userID] = state
+            }
+            if !state.isVideoEnabled {
+                voiceVideoFrames[String(state.userID.rawValue)] = nil
+            }
         case let .voiceServerChanged(info):
             scheduleVoiceServerMigration(to: info)
         case let .snapshotChanged(value):
@@ -1070,12 +1152,18 @@ final class AppModel {
             updated.append(resolved)
         }
         var messagesByID: [MessageID: Message] = [:]
-        for value in updated { messagesByID[value.id] = value }
+        for value in updated {
+            messagesByID[value.id] = value
+        }
         updated = messagesByID.values.sorted { lhs, rhs in
-            if lhs.timestamp != rhs.timestamp { return lhs.timestamp < rhs.timestamp }
+            if lhs.timestamp != rhs.timestamp {
+                return lhs.timestamp < rhs.timestamp
+            }
             return lhs.id < rhs.id
         }
-        if updated != messages { messages = updated }
+        if updated != messages {
+            messages = updated
+        }
     }
 
     private func persist(_ message: Message) {
@@ -1089,19 +1177,24 @@ final class AppModel {
 }
 
 struct MessageRowPresentation: Identifiable, Equatable {
-    var id: MessageID { message.id }
+    var id: MessageID {
+        message.id
+    }
+
     let message: Message
     let startsGroup: Bool
     let replyPreview: MessageReplyPreview?
 }
 
 enum MessageGrouping {
-    // Discord's current cozy layout uses a seven-minute continuation barrier.
+    /// Discord's current cozy layout uses a seven-minute continuation barrier.
     private static let continuationInterval: TimeInterval = 7 * 60
 
     static func rows(for messages: [Message], calendar: Calendar = .autoupdatingCurrent) -> [MessageRowPresentation] {
         var messagesByID: [MessageID: Message] = [:]
-        for message in messages { messagesByID[message.id] = message }
+        for message in messages {
+            messagesByID[message.id] = message
+        }
         return messages.enumerated().map { index, message in
             let replyPreview = message.replyTo.flatMap { messageID -> MessageReplyPreview? in
                 if let referenced = messagesByID[messageID] {

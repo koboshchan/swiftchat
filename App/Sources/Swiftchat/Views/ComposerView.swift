@@ -139,7 +139,9 @@ struct ComposerView: View {
         .fixedSize(horizontal: false, vertical: true)
         .padding(.horizontal, 12).padding(.bottom, 12)
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            if case let .success(urls) = result { attachments.append(contentsOf: urls) }
+            if case let .success(urls) = result {
+                attachments.append(contentsOf: urls)
+            }
         }
         .dropDestination(for: URL.self) { urls, _ in attachments.append(contentsOf: urls); return true }
         .onReceive(NotificationCenter.default.publisher(for: .swiftchatFocusComposer)) { _ in isFocused = true }
@@ -221,10 +223,14 @@ struct ComposerView: View {
         Task {
             let scopedURLs = staged.filter { $0.startAccessingSecurityScopedResource() }
             defer {
-                for url in scopedURLs { url.stopAccessingSecurityScopedResource() }
+                for url in scopedURLs {
+                    url.stopAccessingSecurityScopedResource()
+                }
             }
             let didSend = await model.send(attachments: staged)
-            if !didSend { attachments = staged }
+            if !didSend {
+                attachments = staged
+            }
             isSubmitting = false
             isFocused = true
         }
@@ -237,7 +243,7 @@ struct ComposerView: View {
     ) -> NSRange {
         var value = model.draft
         let replacementRange = selection.flatMap { Range($0, in: value) }
-            ?? value.endIndex..<value.endIndex
+            ?? value.endIndex ..< value.endIndex
         let utf16Offset = selection?.location ?? value.utf16.count
         value.replaceSubrange(replacementRange, with: insertedText)
         model.updateDraft(value)
@@ -278,7 +284,6 @@ private struct ComposerActionButton: View {
     private var hoverColor: Color {
         isHovering && isEnabled ? .primary.opacity(0.14) : .clear
     }
-
 }
 
 private struct ComposerSendButton: View {
@@ -319,8 +324,12 @@ private struct GIFURLPicker: View {
             Text("Send GIF by URL").font(.headline)
             Text("GIF search is provider-backed; paste a direct URL while using the demo provider.").font(.caption).foregroundStyle(.secondary)
             TextField("https://…/animation.gif", text: $value)
-            Button("Add GIF") { if let url = URL(string: value), url.scheme == "https" { select(url) } }
-                .buttonStyle(.borderedProminent).disabled(URL(string: value)?.scheme != "https")
+            Button("Add GIF") {
+                if let url = URL(string: value), url.scheme == "https" {
+                    select(url)
+                }
+            }
+            .buttonStyle(.borderedProminent).disabled(URL(string: value)?.scheme != "https")
         }
         .padding().frame(width: 360)
     }

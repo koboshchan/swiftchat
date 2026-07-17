@@ -1,5 +1,5 @@
-import SwiftchatModels
 import Foundation
+import SwiftchatModels
 
 public protocol ChatProvider: Sendable {
     func bootstrap() async throws -> BootstrapSnapshot
@@ -34,8 +34,13 @@ public protocol ChatProvider: Sendable {
 }
 
 public extension ChatProvider {
-    func emojis(in guildID: GuildID) async throws -> [DiscordEmoji] { [] }
-    func emojiUserSettings() async throws -> EmojiUserSettings { EmojiUserSettings() }
+    func emojis(in guildID: GuildID) async throws -> [DiscordEmoji] {
+        []
+    }
+
+    func emojiUserSettings() async throws -> EmojiUserSettings {
+        EmojiUserSettings()
+    }
 
     func sendTyping(in channelID: ChannelID) async throws {}
 

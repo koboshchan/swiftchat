@@ -1,5 +1,5 @@
-import SwiftchatModels
 import Foundation
+import SwiftchatModels
 
 public struct GIFResult: Identifiable, Hashable, Sendable {
     public let id: String
@@ -24,7 +24,7 @@ public actor MediaCache {
     public let maximumBytes: Int64
     private let directory: URL
 
-    public init(maximumBytes: Int64 = 2 * 1_024 * 1_024 * 1_024, directory: URL? = nil) throws {
+    public init(maximumBytes: Int64 = 2 * 1024 * 1024 * 1024, directory: URL? = nil) throws {
         self.maximumBytes = maximumBytes
         let base = try directory ?? FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
         self.directory = base.appending(path: "Swiftchat/Media", directoryHint: .isDirectory)
@@ -39,7 +39,11 @@ public actor MediaCache {
 
 public struct URLFallbackGIFProvider: GIFProvider {
     public init() {}
-    public func search(query: String) async throws -> [GIFResult] { [] }
-    public func trending() async throws -> [GIFResult] { [] }
-}
+    public func search(query: String) async throws -> [GIFResult] {
+        []
+    }
 
+    public func trending() async throws -> [GIFResult] {
+        []
+    }
+}

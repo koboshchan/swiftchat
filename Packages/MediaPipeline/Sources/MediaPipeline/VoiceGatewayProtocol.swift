@@ -146,7 +146,7 @@ public enum VoiceGatewayCodec {
         case 9:
             event = .resumed
         case 11:
-            event = .clientsConnected(try decodePayload(ClientsPayload.self, from: data).userIDs)
+            event = try .clientsConnected(decodePayload(ClientsPayload.self, from: data).userIDs)
         case 12:
             let value = try decodePayload(VideoPayload.self, from: data)
             event = .video(VoiceVideoState(
@@ -157,7 +157,7 @@ public enum VoiceGatewayCodec {
                 streams: value.streams.map(\.model)
             ))
         case 13:
-            event = .clientDisconnected(try decodePayload(ClientPayload.self, from: data).userID)
+            event = try .clientDisconnected(decodePayload(ClientPayload.self, from: data).userID)
         case 15:
             let wants = try decodePayload([String: Int].self, from: data)
             event = .videoSinkWants(
@@ -171,7 +171,7 @@ public enum VoiceGatewayCodec {
             let value = try decodePayload(TransitionPayload.self, from: data)
             event = .davePrepareTransition(transitionID: value.transitionID, protocolVersion: value.protocolVersion)
         case 22:
-            event = .daveExecuteTransition(transitionID: try decodePayload(TransitionIDPayload.self, from: data).transitionID)
+            event = try .daveExecuteTransition(transitionID: decodePayload(TransitionIDPayload.self, from: data).transitionID)
         case 24:
             let value = try decodePayload(EpochPayload.self, from: data)
             event = .davePrepareEpoch(
@@ -187,7 +187,8 @@ public enum VoiceGatewayCodec {
 
     public static func decodeBinary(_ data: Data) throws -> SequencedVoiceGatewayEvent {
         guard data.count >= 3,
-              let sequence = data.readUInt16BigEndian(at: 0) else {
+              let sequence = data.readUInt16BigEndian(at: 0)
+        else {
             throw VoiceGatewayCodecError.malformedPayload
         }
         let opcode = data[2]
@@ -228,9 +229,11 @@ public enum VoiceGatewayCodec {
             "token": token,
             "max_dave_protocol_version": Int(maxDaveProtocolVersion),
             "video": video,
-            "streams": video ? [["type": "video", "rid": "100", "quality": 100]] : [],
+            "streams": video ? [["type": "video", "rid": "100", "quality": 100]] : []
         ]
-        if let channelID { payload["channel_id"] = channelID }
+        if let channelID {
+            payload["channel_id"] = channelID
+        }
         return try json(opcode: 0, payload: payload)
     }
 
@@ -238,14 +241,14 @@ public enum VoiceGatewayCodec {
         try json(opcode: 1, payload: [
             "protocol": "udp",
             "codecs": [
-                ["name": "opus", "type": "audio", "priority": 1_000, "payload_type": 120],
+                ["name": "opus", "type": "audio", "priority": 1000, "payload_type": 120],
                 [
-                    "name": "H264", "type": "video", "priority": 1_000,
+                    "name": "H264", "type": "video", "priority": 1000,
                     "payload_type": 105, "rtx_payload_type": 106,
-                    "encode": true, "decode": true,
-                ],
+                    "encode": true, "decode": true
+                ]
             ],
-            "data": ["address": address, "port": Int(port), "mode": mode.rawValue] as [String: Any],
+            "data": ["address": address, "port": Int(port), "mode": mode.rawValue] as [String: Any]
         ])
     }
 
@@ -267,13 +270,13 @@ public enum VoiceGatewayCodec {
             "rtx_ssrc": Int(rtxSSRC),
             "max_bitrate": 4_000_000,
             "max_framerate": framerate,
-            "max_resolution": ["type": "fixed", "width": width, "height": height],
+            "max_resolution": ["type": "fixed", "width": width, "height": height]
         ]] : []
         return try json(opcode: 12, payload: [
             "audio_ssrc": Int(audioSSRC),
             "video_ssrc": enabled ? Int(videoSSRC) : 0,
             "rtx_ssrc": enabled ? Int(rtxSSRC) : 0,
-            "streams": streams,
+            "streams": streams
         ])
     }
 
@@ -296,7 +299,7 @@ public enum VoiceGatewayCodec {
             "server_id": serverID,
             "session_id": sessionID,
             "token": token,
-            "seq_ack": sequence,
+            "seq_ack": sequence
         ])
     }
 

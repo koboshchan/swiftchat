@@ -100,7 +100,7 @@ struct ParsedCustomEmoji {
     init?(token: String) {
         let pattern = #"^<(a?):([A-Za-z0-9_]+):([0-9]+)>$"#
         let regex = try! NSRegularExpression(pattern: pattern)
-        let fullRange = NSRange(token.startIndex..<token.endIndex, in: token)
+        let fullRange = NSRange(token.startIndex ..< token.endIndex, in: token)
         guard let match = regex.firstMatch(in: token, range: fullRange),
               let animationRange = Range(match.range(at: 1), in: token),
               let nameRange = Range(match.range(at: 2), in: token),
@@ -126,7 +126,7 @@ private struct DiscordMessageSegment: Identifiable {
 
     static func parse(_ source: String) -> [DiscordMessageSegment] {
         let regex = try! NSRegularExpression(pattern: #"<a?:[A-Za-z0-9_]+:[0-9]+>"#)
-        let sourceRange = NSRange(source.startIndex..<source.endIndex, in: source)
+        let sourceRange = NSRange(source.startIndex ..< source.endIndex, in: source)
         let matches = regex.matches(in: source, range: sourceRange)
         guard !matches.isEmpty else { return [.init(id: 0, content: .text(source))] }
 
@@ -135,7 +135,7 @@ private struct DiscordMessageSegment: Identifiable {
         for match in matches {
             guard let range = Range(match.range, in: source) else { continue }
             if cursor < range.lowerBound {
-                result.append(.init(id: result.count, content: .text(String(source[cursor..<range.lowerBound]))))
+                result.append(.init(id: result.count, content: .text(String(source[cursor ..< range.lowerBound]))))
             }
             result.append(.init(id: result.count, content: .customEmoji(String(source[range]))))
             cursor = range.upperBound
@@ -153,7 +153,7 @@ private struct LinkedImagePresentation {
 
     init(content: String) {
         let regex = try! NSRegularExpression(pattern: #"\[([^\]]+)\]\((https://[^\s)]+)\)"#)
-        let sourceRange = NSRange(content.startIndex..<content.endIndex, in: content)
+        let sourceRange = NSRange(content.startIndex ..< content.endIndex, in: content)
         let references = regex.matches(in: content, range: sourceRange).compactMap { match -> (NSRange, LinkedImageReference)? in
             guard
                 let fullRange = Range(match.range(at: 0), in: content),
@@ -171,7 +171,8 @@ private struct LinkedImagePresentation {
         images = references.map(\.1)
         if references.count == 1,
            let range = Range(references[0].0, in: content),
-           content.trimmingCharacters(in: .whitespacesAndNewlines) == String(content[range]) {
+           content.trimmingCharacters(in: .whitespacesAndNewlines) == String(content[range])
+        {
             visibleText = ""
         } else {
             visibleText = content
@@ -184,7 +185,9 @@ private struct LinkedImageReference: Identifiable {
     let label: String
     let url: URL
 
-    var isEmoji: Bool { url.host == "cdn.discordapp.com" && url.path.hasPrefix("/emojis/") }
+    var isEmoji: Bool {
+        url.host == "cdn.discordapp.com" && url.path.hasPrefix("/emojis/")
+    }
 
     static func isSupported(_ url: URL) -> Bool {
         let imageExtensions = Set(["png", "jpg", "jpeg", "gif", "webp", "avif"])

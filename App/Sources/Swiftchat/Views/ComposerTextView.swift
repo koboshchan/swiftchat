@@ -87,7 +87,8 @@ struct ComposerTextView: NSViewRepresentable {
         if let selection,
            selection.location != NSNotFound,
            NSMaxRange(selection) <= textView.string.utf16.count,
-           textView.selectedRange() != selection {
+           textView.selectedRange() != selection
+        {
             textView.setSelectedRange(selection)
         }
 
@@ -101,7 +102,8 @@ struct ComposerTextView: NSViewRepresentable {
     ) -> CGSize? {
         guard let textView = scrollView.documentView as? NSTextView,
               let layoutManager = textView.layoutManager,
-              let textContainer = textView.textContainer else {
+              let textContainer = textView.textContainer
+        else {
             return nil
         }
 
@@ -119,7 +121,7 @@ struct ComposerTextView: NSViewRepresentable {
     private var textAttributes: [NSAttributedString.Key: Any] {
         [
             .font: font,
-            .foregroundColor: NSColor.labelColor,
+            .foregroundColor: NSColor.labelColor
         ]
     }
 
@@ -197,7 +199,6 @@ struct ComposerTextView: NSViewRepresentable {
                 parent.selection = newSelection
             }
         }
-
     }
 }
 

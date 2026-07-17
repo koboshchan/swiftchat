@@ -11,7 +11,7 @@ public enum H264RTPError: Error, Equatable {
 }
 
 public enum H264RTPPacketizer {
-    public static func packetize(_ annexBFrame: Data, maximumPayloadSize: Int = 1_180) throws -> [H264RTPFragment] {
+    public static func packetize(_ annexBFrame: Data, maximumPayloadSize: Int = 1180) throws -> [H264RTPFragment] {
         guard maximumPayloadSize > 2 else { throw H264RTPError.malformedFrame }
         let nalUnits = AnnexB.split(frame: annexBFrame)
         guard !nalUnits.isEmpty else { throw H264RTPError.malformedFrame }
@@ -32,7 +32,7 @@ public enum H264RTPPacketizer {
                 let isEnd = end == nalu.count
                 let fuHeader = (isStart ? 0x80 : 0) | (isEnd ? 0x40 : 0) | originalType
                 var payload = Data([indicator, fuHeader])
-                payload.append(nalu[offset..<end])
+                payload.append(nalu[offset ..< end])
                 fragments.append(H264RTPFragment(payload: payload, marker: false))
                 offset = end
             }
@@ -77,7 +77,7 @@ public struct H264RTPDepacketizer: Sendable {
         }
 
         switch first & 0x1F {
-        case 1...23:
+        case 1 ... 23:
             AnnexB.append(nalUnit: payload, to: &frame)
         case 24:
             try appendAggregationPacket(payload)
@@ -105,7 +105,7 @@ public struct H264RTPDepacketizer: Sendable {
             guard end <= payload.count else { throw H264RTPError.malformedPacket }
             let lowerBound = payload.index(payload.startIndex, offsetBy: offset)
             let upperBound = payload.index(payload.startIndex, offsetBy: end)
-            AnnexB.append(nalUnit: payload[lowerBound..<upperBound], to: &frame)
+            AnnexB.append(nalUnit: payload[lowerBound ..< upperBound], to: &frame)
             offset = end
         }
     }
@@ -138,7 +138,8 @@ enum AnnexB {
         var index = 0
         while index + 3 <= bytes.count {
             if index + 4 <= bytes.count,
-               bytes[index] == 0, bytes[index + 1] == 0, bytes[index + 2] == 0, bytes[index + 3] == 1 {
+               bytes[index] == 0, bytes[index + 1] == 0, bytes[index + 2] == 0, bytes[index + 3] == 1
+            {
                 starts.append((index, 4))
                 index += 4
             } else if bytes[index] == 0, bytes[index + 1] == 0, bytes[index + 2] == 1 {
@@ -153,11 +154,11 @@ enum AnnexB {
             let begin = start.offset + start.length
             let end = position + 1 < starts.count ? starts[position + 1].offset : bytes.count
             guard begin < end else { return nil }
-            return Data(bytes[begin..<end])
+            return Data(bytes[begin ..< end])
         }
     }
 
-    static func append<S: Sequence>(nalUnit: S, to frame: inout Data) where S.Element == UInt8 {
+    static func append(nalUnit: some Sequence<UInt8>, to frame: inout Data) {
         frame.append(startCode)
         frame.append(contentsOf: nalUnit)
     }

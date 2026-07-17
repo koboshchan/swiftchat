@@ -20,8 +20,8 @@ public enum VoiceIPDiscovery {
         guard data.count == 74,
               data.readUInt16BigEndian(at: 0) == 2,
               data.readUInt16BigEndian(at: 2) == 70,
-              let terminator = data[8..<72].firstIndex(of: 0),
-              let ip = String(data: data[8..<terminator], encoding: .utf8),
+              let terminator = data[8 ..< 72].firstIndex(of: 0),
+              let ip = String(data: data[8 ..< terminator], encoding: .utf8),
               !ip.isEmpty,
               let port = data.readUInt16BigEndian(at: 72) else { return nil }
         return VoiceDiscoveredAddress(ip: ip, port: port)
@@ -45,7 +45,7 @@ public actor VoiceUDPConnection {
             port: NWEndpoint.Port(rawValue: port)!,
             using: .udp
         )
-        let stream = AsyncThrowingStream<Data, any Error>.makeStream(bufferingPolicy: .bufferingNewest(2_000))
+        let stream = AsyncThrowingStream<Data, any Error>.makeStream(bufferingPolicy: .bufferingNewest(2000))
         packets = stream.stream
         continuation = stream.continuation
     }
@@ -79,8 +79,11 @@ public actor VoiceUDPConnection {
     public func send(_ data: Data) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             connection.send(content: data, completion: .contentProcessed { error in
-                if let error { continuation.resume(throwing: error) }
-                else { continuation.resume() }
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
             })
         }
     }
@@ -112,9 +115,13 @@ public actor VoiceUDPConnection {
     private func receiveOne() async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             connection.receiveMessage { data, _, _, error in
-                if let error { continuation.resume(throwing: error) }
-                else if let data { continuation.resume(returning: data) }
-                else { continuation.resume(throwing: URLError(.cannotParseResponse)) }
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if let data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: URLError(.cannotParseResponse))
+                }
             }
         }
     }
@@ -132,7 +139,9 @@ public actor VoiceUDPConnection {
             receiving = false
             return
         }
-        if let data { continuation.yield(data) }
+        if let data {
+            continuation.yield(data)
+        }
         receiveNext()
     }
 
@@ -142,11 +151,11 @@ public actor VoiceUDPConnection {
             while !Task.isCancelled {
                 guard let self else { return }
                 var data = Data()
-                let counter = await self.nextKeepaliveCounter()
+                let counter = await nextKeepaliveCounter()
                 var littleEndian = counter.littleEndian
                 Swift.withUnsafeBytes(of: &littleEndian) { data.append(contentsOf: $0) }
                 data.append(Data(repeating: 0, count: 4))
-                try? await self.send(data)
+                try? await send(data)
                 try? await Task.sleep(for: .seconds(5))
             }
         }

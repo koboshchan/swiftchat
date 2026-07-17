@@ -10,7 +10,9 @@ struct AvatarView: View {
             Circle().fill(Color.accentColor.gradient)
             if let url {
                 AnimatedRemoteImage(url: url)
-            } else { fallback }
+            } else {
+                fallback
+            }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())

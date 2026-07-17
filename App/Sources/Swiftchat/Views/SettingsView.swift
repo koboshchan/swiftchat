@@ -55,13 +55,13 @@ struct SettingsView: View {
                     }
                 }
                 LabeledContent("Input volume") {
-                    Slider(value: $inputVolume, in: 0...2)
+                    Slider(value: $inputVolume, in: 0 ... 2)
                     Text("\(Int(inputVolume * 100))%")
                         .monospacedDigit()
                         .frame(width: 46, alignment: .trailing)
                 }
                 LabeledContent("Output volume") {
-                    Slider(value: $outputVolume, in: 0...2)
+                    Slider(value: $outputVolume, in: 0 ... 2)
                     Text("\(Int(outputVolume * 100))%")
                         .monospacedDigit()
                         .frame(width: 46, alignment: .trailing)

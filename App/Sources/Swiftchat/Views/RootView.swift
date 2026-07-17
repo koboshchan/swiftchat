@@ -73,7 +73,9 @@ private struct SwiftchatSessionLoadingView: View {
     }
 
     private var detail: String {
-        if isOfflineTesting { return "Loading offline testing data…" }
+        if isOfflineTesting {
+            return "Loading offline testing data…"
+        }
         switch state {
         case .restoring: return "Checking your saved session…"
         case .connecting: return "Loading your Discord workspace…"
@@ -109,12 +111,14 @@ private struct ChatRootView: View {
                     isOfflineTesting: model.isOfflineTesting,
                     activeVoiceChannelID: model.activeVoiceChannel?.id,
                     connectAccount: {
-                        if !model.isOfflineTesting { showLogin = true }
+                        if !model.isOfflineTesting {
+                            showLogin = true
+                        }
                     },
                     logout: { await model.logout() },
                     updateStatus: { await model.updateStatus($0) }
                 )
-                    .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 310)
+                .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 310)
             } detail: {
                 ChatWorkspaceView(model: model)
                     .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
@@ -170,7 +174,11 @@ private struct ChatRootView: View {
             }
         }
         .sheet(isPresented: $model.showQuickSwitcher) { QuickSwitcherView(model: model) }
-        .alert("Swiftchat", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.dismissError() } })) {
+        .alert("Swiftchat", isPresented: Binding(get: { model.errorMessage != nil }, set: {
+            if !$0 {
+                model.dismissError()
+            }
+        })) {
             Button("OK") { model.dismissError() }
         } message: {
             Text(model.errorMessage ?? "Unknown error")

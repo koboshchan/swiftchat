@@ -40,14 +40,20 @@ public struct RTPHeader: Equatable, Sendable {
     public var encoded: Data {
         var data = Data()
         var first: UInt8 = 0x80 | UInt8(csrcs.count)
-        if padding { first |= 0x20 }
-        if hasExtension { first |= 0x10 }
+        if padding {
+            first |= 0x20
+        }
+        if hasExtension {
+            first |= 0x10
+        }
         data.append(first)
         data.append((marker ? 0x80 : 0) | (payloadType & 0x7F))
         data.appendBigEndian(sequence)
         data.appendBigEndian(timestamp)
         data.appendBigEndian(ssrc)
-        for csrc in csrcs { data.appendBigEndian(csrc) }
+        for csrc in csrcs {
+            data.appendBigEndian(csrc)
+        }
         if let extensionProfile, let extensionLengthInWords {
             data.appendBigEndian(extensionProfile)
             data.appendBigEndian(extensionLengthInWords)
@@ -63,7 +69,7 @@ public struct RTPHeader: Equatable, Sendable {
         var offset = 12
         guard packet.count >= offset + csrcCount * 4 else { return nil }
         var csrcs: [UInt32] = []
-        for _ in 0..<csrcCount {
+        for _ in 0 ..< csrcCount {
             guard let value = packet.readUInt32BigEndian(at: offset) else { return nil }
             csrcs.append(value)
             offset += 4
@@ -99,7 +105,7 @@ public struct RTPHeader: Equatable, Sendable {
 }
 
 extension Data {
-    mutating func appendBigEndian<T: FixedWidthInteger>(_ value: T) {
+    mutating func appendBigEndian(_ value: some FixedWidthInteger) {
         var value = value.bigEndian
         Swift.withUnsafeBytes(of: &value) { append(contentsOf: $0) }
     }

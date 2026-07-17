@@ -9,9 +9,15 @@ enum ComposerReturnAction: Equatable {
         command: Bool,
         hasMarkedText: Bool
     ) -> Self {
-        if hasMarkedText { return .inputMethod }
-        if shift { return .newline }
-        if sendWithReturn || command { return .send }
+        if hasMarkedText {
+            return .inputMethod
+        }
+        if shift {
+            return .newline
+        }
+        if sendWithReturn || command {
+            return .send
+        }
         return .newline
     }
 }

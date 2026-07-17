@@ -102,9 +102,9 @@ actor DiscordRemoteAuthManager {
 
             let currentGeneration = generation
             receiveTask = Task { [weak self] in
-                    await self?.receiveMessages(
-                        from: socket,
-                        encodedPublicKey: encodedPublicKey,
+                await self?.receiveMessages(
+                    from: socket,
+                    encodedPublicKey: encodedPublicKey,
                     generation: currentGeneration
                 )
             }
@@ -125,8 +125,9 @@ actor DiscordRemoteAuthManager {
         guard let data = Data(base64Encoded: encryptedToken),
               let decrypted = decrypt(data),
               let token = String(data: decrypted, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines),
-              !token.isEmpty else {
+              .trimmingCharacters(in: .whitespacesAndNewlines),
+              !token.isEmpty
+        else {
             throw DiscordRemoteAuthError.tokenDecryptionFailed
         }
         return token
@@ -180,14 +181,16 @@ actor DiscordRemoteAuthManager {
         case .nonceProof:
             guard let encrypted = payload.encryptedNonce,
                   let encryptedData = Data(base64Encoded: encrypted),
-                  let nonce = decrypt(encryptedData) else {
+                  let nonce = decrypt(encryptedData)
+            else {
                 throw DiscordRemoteAuthError.invalidGatewayPayload
             }
             try await send(["op": "nonce_proof", "nonce": Self.base64URL(nonce)])
 
         case .pendingRemoteInit:
             guard let fingerprint = payload.fingerprint,
-                  let url = Self.qrCodeURL(fingerprint: fingerprint) else {
+                  let url = Self.qrCodeURL(fingerprint: fingerprint)
+            else {
                 throw DiscordRemoteAuthError.invalidGatewayPayload
             }
             emit(.qrCode(url))
@@ -222,7 +225,7 @@ actor DiscordRemoteAuthManager {
                 guard !Task.isCancelled else { return }
                 do {
                     guard let self, await self.generation == generation else { return }
-                    try await self.send(["op": "heartbeat"])
+                    try await send(["op": "heartbeat"])
                 } catch {
                     return
                 }
@@ -247,7 +250,9 @@ actor DiscordRemoteAuthManager {
         heartbeatTask = nil
         webSocket?.cancel(with: .goingAway, reason: nil)
         webSocket = nil
-        if clearPrivateKey { privateKey = nil }
+        if clearPrivateKey {
+            privateKey = nil
+        }
     }
 
     private func decrypt(_ ciphertext: Data) -> Data? {
@@ -263,7 +268,9 @@ actor DiscordRemoteAuthManager {
     }
 
     private func emit(_ event: DiscordRemoteAuthEvent) {
-        for continuation in continuations.values { continuation.yield(event) }
+        for continuation in continuations.values {
+            continuation.yield(event)
+        }
     }
 
     private func removeContinuation(_ id: UUID) {
@@ -294,25 +301,26 @@ actor DiscordRemoteAuthManager {
             .replacingOccurrences(of: "/", with: "_")
     }
 
-    nonisolated private static func makeKeyPair() throws -> (privateKey: SecKey, encodedPublicKey: String) {
+    private nonisolated static func makeKeyPair() throws -> (privateKey: SecKey, encodedPublicKey: String) {
         let attributes: [CFString: Any] = [
             kSecAttrKeyType: kSecAttrKeyTypeRSA,
-            kSecAttrKeySizeInBits: 2_048,
+            kSecAttrKeySizeInBits: 2048
         ]
         var error: Unmanaged<CFError>?
         guard let privateKey = SecKeyCreateRandomKey(attributes as CFDictionary, &error),
               let publicKey = SecKeyCopyPublicKey(privateKey),
-              let rawPublicKey = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else {
+              let rawPublicKey = SecKeyCopyExternalRepresentation(publicKey, &error) as Data?
+        else {
             throw DiscordRemoteAuthError.keyGenerationFailed
         }
         let spki = subjectPublicKeyInfo(for: rawPublicKey)
         return (privateKey, spki.base64EncodedString())
     }
 
-    nonisolated private static func subjectPublicKeyInfo(for pkcs1: Data) -> Data {
+    private nonisolated static func subjectPublicKeyInfo(for pkcs1: Data) -> Data {
         let rsaAlgorithmIdentifier = Data([
             0x30, 0x0D, 0x06, 0x09, 0x2A, 0x86, 0x48, 0x86,
-            0xF7, 0x0D, 0x01, 0x01, 0x01, 0x05, 0x00,
+            0xF7, 0x0D, 0x01, 0x01, 0x01, 0x05, 0x00
         ])
         let bitStringBody = Data([0x00]) + pkcs1
         let bitString = Data([0x03]) + derLength(bitStringBody.count) + bitStringBody
@@ -320,8 +328,10 @@ actor DiscordRemoteAuthManager {
         return Data([0x30]) + derLength(body.count) + body
     }
 
-    nonisolated private static func derLength(_ length: Int) -> Data {
-        if length < 0x80 { return Data([UInt8(length)]) }
+    private nonisolated static func derLength(_ length: Int) -> Data {
+        if length < 0x80 {
+            return Data([UInt8(length)])
+        }
         var value = length
         var bytes: [UInt8] = []
         while value > 0 {

@@ -1,5 +1,5 @@
-import AVFoundation
 import AudioToolbox
+import AVFoundation
 import CoreAudio
 import Foundation
 
@@ -29,7 +29,9 @@ public struct AudioDeviceInfo: Identifiable, Equatable, Sendable {
             || transportType == kAudioDeviceTransportTypeBluetoothLE
     }
 
-    public var isBuiltIn: Bool { transportType == kAudioDeviceTransportTypeBuiltIn }
+    public var isBuiltIn: Bool {
+        transportType == kAudioDeviceTransportTypeBuiltIn
+    }
 
     public var isVirtual: Bool {
         transportType == kAudioDeviceTransportTypeVirtual
@@ -38,7 +40,10 @@ public struct AudioDeviceInfo: Identifiable, Equatable, Sendable {
 }
 
 public struct CameraDeviceInfo: Identifiable, Equatable, Sendable {
-    public var id: String { uniqueID }
+    public var id: String {
+        uniqueID
+    }
+
     public var uniqueID: String
     public var name: String
 
@@ -70,7 +75,7 @@ public enum MediaDeviceCatalog {
         let cameraTypes: [AVCaptureDevice.DeviceType] = [
             .builtInWideAngleCamera,
             .external,
-            .continuityCamera,
+            .continuityCamera
         ]
         let cameras = AVCaptureDevice.DiscoverySession(
             deviceTypes: cameraTypes,
@@ -211,7 +216,9 @@ public enum MediaDeviceCatalog {
     }
 
     private static func deviceOrder(_ lhs: AudioDeviceInfo, _ rhs: AudioDeviceInfo) -> Bool {
-        if lhs.isDefault != rhs.isDefault { return lhs.isDefault }
+        if lhs.isDefault != rhs.isDefault {
+            return lhs.isDefault
+        }
         return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
     }
 }

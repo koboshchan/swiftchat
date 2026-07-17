@@ -1,11 +1,11 @@
 import DiscordProtocol
 import Foundation
+@testable import Swiftchat
 import SwiftchatModels
 import Testing
-@testable import Swiftchat
 
 @MainActor
-@Test func typingStateSupportsMultipleUsersIndependentRefreshAndSelfSuppression() async {
+@Test func `typing state supports multiple users independent refresh and self suppression`() {
     let state = TypingStateModel(expiry: .milliseconds(40))
     let channel = ChannelID(rawValue: 10)
     let current = User(id: UserID(rawValue: 1), username: "me", displayName: "Me")
@@ -37,7 +37,7 @@ import Testing
 }
 
 @MainActor
-@Test func typingStateExpiresAutomatically() async {
+@Test func `typing state expires automatically`() async {
     let state = TypingStateModel(expiry: .milliseconds(10))
     let channel = ChannelID(rawValue: 20)
     let user = User(id: UserID(rawValue: 21), username: "timer", displayName: "Timer")
@@ -48,7 +48,7 @@ import Testing
 }
 
 @MainActor
-@Test func remoteTypingIsChannelScopedClearedByMessageAndDisconnect() async throws {
+@Test func `remote typing is channel scoped cleared by message and disconnect`() async throws {
     let provider = TypingTestProvider()
     let model = AppModel(launchMode: .offlineTesting, provider: provider, typingExpiry: .seconds(1))
     await model.start()
@@ -76,7 +76,7 @@ import Testing
 }
 
 @MainActor
-@Test func localTypingDebouncesThrottlesAndCancelsForDraftSendAndChannelChanges() async throws {
+@Test func `local typing debounces throttles and cancels for draft send and channel changes`() async throws {
     let provider = TypingTestProvider()
     let model = AppModel(
         launchMode: .offlineTesting,
@@ -127,7 +127,7 @@ import Testing
 }
 
 @MainActor
-@Test func mockTypingIsDeterministicAndRejectsVoiceChannels() async throws {
+@Test func `mock typing is deterministic and rejects voice channels`() async throws {
     let provider = MockChatProvider()
     _ = try await provider.bootstrap()
     try await provider.sendTyping(in: ChannelID(rawValue: 210))
@@ -139,7 +139,7 @@ import Testing
 }
 
 @MainActor
-@Test func composerReturnDecisionCoversSettingShiftCommandAndIME() {
+@Test func `composer return decision covers setting shift command and IME`() {
     #expect(ComposerReturnAction.decide(
         sendWithReturn: true, shift: false, command: false, hasMarkedText: false
     ) == .send)
@@ -158,7 +158,7 @@ import Testing
 }
 
 @MainActor
-@Test func attachmentOnlySendWorksAndWhitespaceOnlyDoesNotSend() async {
+@Test func `attachment only send works and whitespace only does not send`() async {
     let provider = TypingTestProvider()
     let model = AppModel(launchMode: .offlineTesting, provider: provider)
     await model.start()
@@ -174,8 +174,10 @@ import Testing
 
 @MainActor
 private func eventuallyOnMain(_ condition: @escaping @MainActor () -> Bool) async -> Bool {
-    for _ in 0..<200 {
-        if condition() { return true }
+    for _ in 0 ..< 200 {
+        if condition() {
+            return true
+        }
         try? await Task.sleep(for: .milliseconds(1))
     }
     return condition()
@@ -187,31 +189,47 @@ private actor TypingTestProvider: ChatProvider {
     private let channels = [
         Channel(id: ChannelID(rawValue: 10), guildID: nil, name: "text", kind: .directMessage),
         Channel(id: ChannelID(rawValue: 11), guildID: nil, name: "voice", kind: .voice),
-        Channel(id: ChannelID(rawValue: 12), guildID: nil, name: "group", kind: .groupDirectMessage),
+        Channel(id: ChannelID(rawValue: 12), guildID: nil, name: "group", kind: .groupDirectMessage)
     ]
     private var continuation: AsyncStream<ClientEvent>.Continuation?
     private(set) var typingChannels: [ChannelID] = []
     private(set) var sendCount = 0
     private var nextMessageID: UInt64 = 100
 
-    var typingCount: Int { typingChannels.count }
+    var typingCount: Int {
+        typingChannels.count
+    }
 
     func bootstrap() async throws -> BootstrapSnapshot {
         continuation?.yield(.connectionChanged(.ready))
         return BootstrapSnapshot(currentUser: currentUser, guilds: [], channels: channels, members: [])
     }
 
-    func channels(in guildID: GuildID?) async throws -> [Channel] { channels }
-    func members(in guildID: GuildID?) async throws -> [Member] { [] }
+    func channels(in guildID: GuildID?) async throws -> [Channel] {
+        channels
+    }
+
+    func members(in guildID: GuildID?) async throws -> [Member] {
+        []
+    }
+
     func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
         throw ChatProviderError.invalidRequest("not used")
     }
-    func currentStatus() async -> PresenceStatus { .online }
+
+    func currentStatus() async -> PresenceStatus {
+        .online
+    }
+
     func updateStatus(_ status: PresenceStatus) async throws {}
     func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
         MessagePage(messages: [], hasMoreBefore: false)
     }
-    func sendTyping(in channelID: ChannelID) async throws { typingChannels.append(channelID) }
+
+    func sendTyping(in channelID: ChannelID) async throws {
+        typingChannels.append(channelID)
+    }
+
     func send(_ draft: SendMessageDraft) async throws -> Message {
         sendCount += 1
         nextMessageID += 1
@@ -228,9 +246,11 @@ private actor TypingTestProvider: ChatProvider {
         continuation?.yield(.messageCreated(message))
         return message
     }
+
     func edit(messageID: MessageID, channelID: ChannelID, content: String) async throws -> Message {
         throw ChatProviderError.invalidRequest("not used")
     }
+
     func delete(messageID: MessageID, channelID: ChannelID) async throws {}
     func toggleReaction(_ emoji: String, messageID: MessageID, channelID: ChannelID) async throws {}
     func eventStream() async -> AsyncStream<ClientEvent> {
@@ -238,6 +258,12 @@ private actor TypingTestProvider: ChatProvider {
         continuation = stream.continuation
         return stream.stream
     }
-    func disconnect() async { continuation?.yield(.connectionChanged(.disconnected)) }
-    func emit(_ event: ClientEvent) { continuation?.yield(event) }
+
+    func disconnect() async {
+        continuation?.yield(.connectionChanged(.disconnected))
+    }
+
+    func emit(_ event: ClientEvent) {
+        continuation?.yield(event)
+    }
 }

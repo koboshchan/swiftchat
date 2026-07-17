@@ -1,5 +1,5 @@
-import SwiftchatModels
 import MediaPipeline
+import SwiftchatModels
 import SwiftUI
 
 struct VoiceVideoGrid: View {
@@ -65,15 +65,17 @@ struct VoiceVideoGrid: View {
         }
 
         return values.values.sorted {
-            if $0.isLocal != $1.isLocal { return $0.isLocal }
+            if $0.isLocal != $1.isLocal {
+                return $0.isLocal
+            }
             return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
         }
     }
 
     private var columns: [GridItem] {
         let columnCount = switch participants.count {
-        case 0...1: 1
-        case 2...4: 2
+        case 0 ... 1: 1
+        case 2 ... 4: 2
         default: 3
         }
         return Array(
@@ -84,9 +86,9 @@ struct VoiceVideoGrid: View {
 
     private var gridMaximumWidth: CGFloat {
         switch participants.count {
-        case 0...1: 900
-        case 2...4: 1_180
-        default: 1_420
+        case 0 ... 1: 900
+        case 2 ... 4: 1180
+        default: 1420
         }
     }
 
@@ -154,7 +156,7 @@ private struct VoiceParticipantTile: View {
             .padding(10)
         }
         .overlay(alignment: .topTrailing) {
-            if !participant.isLocal && (isHovering || showVolume) {
+            if !participant.isLocal, isHovering || showVolume {
                 Button {
                     showVolume.toggle()
                 } label: {
@@ -242,7 +244,7 @@ private struct ParticipantVolumeControl: View {
                 Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .foregroundStyle(.secondary)
                     .frame(width: 18)
-                Slider(value: $volume, in: 0...2)
+                Slider(value: $volume, in: 0 ... 2)
                     .frame(width: 180)
                 Text("\(Int(volume * 100))%")
                     .font(.caption.monospacedDigit())

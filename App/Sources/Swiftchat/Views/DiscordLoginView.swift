@@ -112,11 +112,11 @@ struct DiscordLoginView: View {
                         .frame(width: 32, height: 32)
                         .background(.white.opacity(0.08), in: Circle())
                 }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(.white.opacity(0.72))
-                    .keyboardShortcut(.cancelAction)
-                    .padding(20)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .buttonStyle(.plain)
+                .foregroundStyle(.white.opacity(0.72))
+                .keyboardShortcut(.cancelAction)
+                .padding(20)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
             }
 
             if let captchaChallenge {
@@ -405,7 +405,7 @@ private struct DiscordLoginBackground: View {
                 colors: [
                     Color(hex: 0x130D19),
                     Color(hex: 0x211326),
-                    Color(hex: 0x100C17),
+                    Color(hex: 0x100C17)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -441,11 +441,7 @@ private struct DiscordLoginHeader: View {
 }
 
 private struct DiscordLoginCard<Content: View>: View {
-    let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
+    @ViewBuilder let content: Content
 
     var body: some View {
         VStack(spacing: 18) { content }
@@ -576,7 +572,7 @@ private struct LoginTextEditorStyleBridge: NSViewRepresentable {
             editor.insertionPointColor = .white
             editor.selectedTextAttributes = [
                 .backgroundColor: NSColor.white.withAlphaComponent(0.22),
-                .foregroundColor: NSColor.white,
+                .foregroundColor: NSColor.white
             ]
         }
     }
@@ -693,7 +689,7 @@ private struct DiscordRemoteAuthPanel: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func remoteAuthSymbol<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+    private func remoteAuthSymbol(@ViewBuilder content: () -> some View) -> some View {
         content()
             .frame(width: 174, height: 174)
             .background(Color(hex: 0x160F1A).opacity(0.68), in: RoundedRectangle(cornerRadius: 18))
@@ -762,13 +758,13 @@ enum DiscordQRCodeRenderer {
 
         let finderOrigins = detectedFinderOrigins(in: modules, count: moduleCount)
         func isDisplayedDataModule(x: Int, y: Int) -> Bool {
-            guard (0..<moduleCount).contains(x), (0..<moduleCount).contains(y) else { return false }
+            guard (0 ..< moduleCount).contains(x), (0 ..< moduleCount).contains(y) else { return false }
             let sourceY = moduleCount - 1 - y
             guard isDark(modules, count: moduleCount, x: x, y: sourceY) else { return false }
             return !finderOrigins.contains(where: { finderContains($0, x: x, y: sourceY) })
         }
-        for y in 0..<moduleCount {
-            for x in 0..<moduleCount where isDisplayedDataModule(x: x, y: y) {
+        for y in 0 ..< moduleCount {
+            for x in 0 ..< moduleCount where isDisplayedDataModule(x: x, y: y) {
                 drawDataModule(
                     context: context,
                     x: x,
@@ -821,10 +817,10 @@ enum DiscordQRCodeRenderer {
     private static func matchesFinder(in modules: [UInt8], count: Int, origin: CGPoint) -> Bool {
         let originX = Int(origin.x)
         let originY = Int(origin.y)
-        for y in 0..<7 {
-            for x in 0..<7 {
+        for y in 0 ..< 7 {
+            for x in 0 ..< 7 {
                 let expectedDark = x == 0 || x == 6 || y == 0 || y == 6
-                    || ((2...4).contains(x) && (2...4).contains(y))
+                    || ((2 ... 4).contains(x) && (2 ... 4).contains(y))
                 if isDark(modules, count: count, x: originX + x, y: originY + y) != expectedDark {
                     return false
                 }
@@ -836,7 +832,7 @@ enum DiscordQRCodeRenderer {
     private static func finderContains(_ origin: CGPoint, x: Int, y: Int) -> Bool {
         let originX = Int(origin.x)
         let originY = Int(origin.y)
-        return (originX..<(originX + 7)).contains(x) && (originY..<(originY + 7)).contains(y)
+        return (originX ..< (originX + 7)).contains(x) && (originY ..< (originY + 7)).contains(y)
     }
 
     private static func drawDataModule(

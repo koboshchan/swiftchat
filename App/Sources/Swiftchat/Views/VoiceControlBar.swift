@@ -142,7 +142,8 @@ struct VoiceControlBar<SettingsControl: View>: View {
     private var connectionSubtitle: String {
         let channel = model.activeVoiceChannel?.name ?? "Voice"
         guard let guildID = model.activeVoiceChannel?.guildID,
-              let guild = model.snapshot?.guilds.first(where: { $0.id == guildID }) else {
+              let guild = model.snapshot?.guilds.first(where: { $0.id == guildID })
+        else {
             return channel
         }
         return "\(channel) / \(guild.name)"
@@ -219,7 +220,8 @@ struct VoiceSidebarStatus: View {
     private var connectionSubtitle: String {
         let channel = model.activeVoiceChannel?.name ?? "Voice"
         guard let guildID = model.activeVoiceChannel?.guildID,
-              let guild = model.snapshot?.guilds.first(where: { $0.id == guildID }) else {
+              let guild = model.snapshot?.guilds.first(where: { $0.id == guildID })
+        else {
             return channel
         }
         return "\(channel) / \(guild.name)"
@@ -585,7 +587,7 @@ private struct VolumeControl: View {
                     .monospacedDigit()
             }
             .font(.caption)
-            Slider(value: $value, in: 0...2)
+            Slider(value: $value, in: 0 ... 2)
         }
     }
 }

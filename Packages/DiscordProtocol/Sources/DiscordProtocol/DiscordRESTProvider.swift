@@ -1,6 +1,6 @@
-import SwiftchatModels
 import Foundation
 import OSLog
+import SwiftchatModels
 
 private let gatewayLogger = Logger(subsystem: "dev.swiftchat.Swiftchat", category: "Gateway")
 
@@ -113,7 +113,9 @@ public actor DiscordRESTProvider: ChatProvider {
     }
 
     public func channels(in guildID: GuildID?) async throws -> [Channel] {
-        if let cached = cachedChannels[guildID] { return cached }
+        if let cached = cachedChannels[guildID] {
+            return cached
+        }
         guard let guildID else { return cachedChannels[nil] ?? [] }
         let values: [ChannelDTO] = try await request("/guilds/\(guildID)/channels")
         let categories = Dictionary(uniqueKeysWithValues: values.filter { $0.type == 4 }.map { ($0.id, $0) })
@@ -126,7 +128,9 @@ public actor DiscordRESTProvider: ChatProvider {
             )
         }
         .sorted { lhs, rhs in
-            if lhs.categoryPosition != rhs.categoryPosition { return lhs.categoryPosition < rhs.categoryPosition }
+            if lhs.categoryPosition != rhs.categoryPosition {
+                return lhs.categoryPosition < rhs.categoryPosition
+            }
             return lhs.position < rhs.position
         }
         cachedChannels[guildID] = channels
@@ -148,20 +152,26 @@ public actor DiscordRESTProvider: ChatProvider {
         }
         pendingMemberGuildID = guildID
         gatewayLogger.info("Member list requested; gatewayReady=\(self.gatewayReady)")
-        if gatewayReady { await attemptMemberSubscription(guildID: guildID) }
+        if gatewayReady {
+            await attemptMemberSubscription(guildID: guildID)
+        }
         return cachedMembers[guildID] ?? []
     }
 
     public func profile(for userID: UserID, in guildID: GuildID?) async throws -> UserProfile {
         let key = ProfileCacheKey(userID: userID, guildID: guildID)
-        if let cached = cachedProfiles[key] { return cached }
+        if let cached = cachedProfiles[key] {
+            return cached
+        }
 
         var query = [
             URLQueryItem(name: "with_mutual_guilds", value: "true"),
             URLQueryItem(name: "with_mutual_friends", value: "true"),
-            URLQueryItem(name: "with_mutual_friends_count", value: "true"),
+            URLQueryItem(name: "with_mutual_friends_count", value: "true")
         ]
-        if let guildID { query.append(URLQueryItem(name: "guild_id", value: guildID.description)) }
+        if let guildID {
+            query.append(URLQueryItem(name: "guild_id", value: guildID.description))
+        }
         let dto: UserProfileDTO = try await request("/users/\(userID)/profile", query: query)
 
         let effectID = dto.guildMemberProfile?.profileEffect?.resolvedID ?? dto.userProfile?.profileEffect?.resolvedID
@@ -173,16 +183,24 @@ public actor DiscordRESTProvider: ChatProvider {
             )
             var effectsByID: [String: ProfileEffectConfigDTO] = [:]
             for effect in response?.profileEffectConfigs?.elements ?? [] {
-                if let id = effect.id { effectsByID[id] = effect }
-                if let skuID = effect.skuID { effectsByID[skuID] = effect }
+                if let id = effect.id {
+                    effectsByID[id] = effect
+                }
+                if let skuID = effect.skuID {
+                    effectsByID[skuID] = effect
+                }
             }
             profileEffects = effectsByID
         }
         if let effectID, profileEffects?[effectID] == nil {
             let product: CollectibleProductDTO? = try? await request("/collectibles-products/\(effectID)")
             for effect in product?.items?.elements.filter({ $0.type == 1 }) ?? [] {
-                if let id = effect.id { profileEffects?[id] = effect }
-                if let skuID = effect.skuID { profileEffects?[skuID] = effect }
+                if let id = effect.id {
+                    profileEffects?[id] = effect
+                }
+                if let skuID = effect.skuID {
+                    profileEffects?[skuID] = effect
+                }
             }
         }
 
@@ -200,10 +218,14 @@ public actor DiscordRESTProvider: ChatProvider {
     }
 
     public func emojis(in guildID: GuildID) async throws -> [DiscordEmoji] {
-        if let cached = cachedEmojis[guildID], cached.isFresh { return cached.emojis }
+        if let cached = cachedEmojis[guildID], cached.isFresh {
+            return cached.emojis
+        }
         if let disk = try? loadEmojiCache(for: guildID) {
             cachedEmojis[guildID] = disk
-            if disk.isFresh { return disk.emojis }
+            if disk.isFresh {
+                return disk.emojis
+            }
         }
 
         do {
@@ -214,13 +236,17 @@ public actor DiscordRESTProvider: ChatProvider {
             try? persistEmojiCache(entry, for: guildID)
             return emojis
         } catch {
-            if let stale = cachedEmojis[guildID] { return stale.emojis }
+            if let stale = cachedEmojis[guildID] {
+                return stale.emojis
+            }
             throw error
         }
     }
 
     public func emojiUserSettings() async throws -> EmojiUserSettings {
-        if let cachedEmojiUserSettings { return cachedEmojiUserSettings }
+        if let cachedEmojiUserSettings {
+            return cachedEmojiUserSettings
+        }
         let response: UserSettingsProtoDTO = try await request("/users/@me/settings-proto/2")
         guard let data = Data(base64Encoded: response.settings) else { return EmojiUserSettings() }
         let settings = DiscordSettingsProto.emojiSettings(from: data)
@@ -248,7 +274,7 @@ public actor DiscordRESTProvider: ChatProvider {
     }
 
     private func searchGuildMembers(guildID: GuildID) async throws -> [GuildMemberSearchResultDTO] {
-        for attempt in 0..<3 {
+        for attempt in 0 ..< 3 {
             let (data, response) = try await perform(
                 "/guilds/\(guildID)/members/search",
                 method: "GET",
@@ -261,7 +287,7 @@ public actor DiscordRESTProvider: ChatProvider {
                 try await Task.sleep(for: .seconds(delay))
                 continue
             }
-            guard (200..<300).contains(response.statusCode) else {
+            guard (200 ..< 300).contains(response.statusCode) else {
                 throw ChatProviderError.transport(status: response.statusCode, requestID: response.value(forHTTPHeaderField: "x-request-id"))
             }
             return try JSONDecoder().decode([GuildMemberSearchResultDTO].self, from: data)
@@ -269,33 +295,41 @@ public actor DiscordRESTProvider: ChatProvider {
         return []
     }
 
-    public func currentStatus() async -> PresenceStatus { presenceStatus }
+    public func currentStatus() async -> PresenceStatus {
+        presenceStatus
+    }
 
     public func updateStatus(_ status: PresenceStatus) async throws {
         try await sendGateway([
             "op": 3,
-            "d": ["since": 0, "activities": [], "status": status.rawValue, "afk": false] as [String: Any],
+            "d": ["since": 0, "activities": [], "status": status.rawValue, "afk": false] as [String: Any]
         ])
         presenceStatus = status
         UserDefaults.standard.set(status.rawValue, forKey: statusDefaultsKey)
     }
 
-    private var statusDefaultsKey: String { "dev.swiftchat.presence.\(handle.accountID)" }
+    private var statusDefaultsKey: String {
+        "dev.swiftchat.presence.\(handle.accountID)"
+    }
 
     public func messages(in channelID: ChannelID, before: MessageID?, limit: Int) async throws -> MessagePage {
         var query = [URLQueryItem(name: "limit", value: String(min(max(limit, 1), 100)))]
-        if let before { query.append(URLQueryItem(name: "before", value: before.description)) }
+        if let before {
+            query.append(URLQueryItem(name: "before", value: before.description))
+        }
         let payload: LossyList<MessageDTO> = try await request("/channels/\(channelID)/messages", query: query)
         if payload.skippedCount > 0 {
             gatewayLogger.warning("Skipped \(payload.skippedCount) unsupported message payloads in channel \(channelID)")
         }
         let values = payload.elements.compactMap { try? $0.domain() }.sorted { $0.timestamp < $1.timestamp }
-        for message in values { cachedMessages[message.id] = message }
+        for message in values {
+            cachedMessages[message.id] = message
+        }
         return MessagePage(messages: values, hasMoreBefore: values.count == min(max(limit, 1), 100))
     }
 
     public func sendTyping(in channelID: ChannelID) async throws {
-        let channel = cachedChannels.values.lazy.flatMap { $0 }.first { $0.id == channelID }
+        let channel = cachedChannels.values.lazy.flatMap(\.self).first { $0.id == channelID }
         guard let channel else { throw ChatProviderError.channelNotFound }
         guard channel.kind != .voice, channel.kind != .forum, channel.kind != .unknown else {
             throw ChatProviderError.invalidRequest("Typing is unavailable in this channel.")
@@ -314,13 +348,13 @@ public actor DiscordRESTProvider: ChatProvider {
             // The current web client always includes its best-known network
             // type. SwiftChat has no account-safe reason to probe interfaces
             // for this request, so it uses the official unknown fallback.
-            "mobile_network_type": .string("unknown"),
+            "mobile_network_type": .string("unknown")
         ]
         if let replyTo = draft.replyTo {
             body["message_reference"] = .object(["message_id": .string(replyTo.description)])
         }
         if !draft.attachmentURLs.isEmpty {
-            body["attachments"] = .array(try await uploadAttachments(draft.attachmentURLs, channelID: draft.channelID))
+            body["attachments"] = try await .array(uploadAttachments(draft.attachmentURLs, channelID: draft.channelID))
         }
         let dto: MessageDTO = try await request(
             "/channels/\(draft.channelID)/messages",
@@ -339,14 +373,18 @@ public actor DiscordRESTProvider: ChatProvider {
         var descriptors: [JSONValue] = []
         for (index, url) in urls.enumerated() {
             let accessed = url.startAccessingSecurityScopedResource()
-            defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+            defer {
+                if accessed {
+                    url.stopAccessingSecurityScopedResource()
+                }
+            }
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
             let size = (attributes[.size] as? NSNumber)?.intValue ?? 0
             descriptors.append(.object([
                 "filename": .string(url.lastPathComponent),
                 "file_size": .number(Double(size)),
                 "id": .string(String(index)),
-                "is_clip": .bool(false),
+                "is_clip": .bool(false)
             ]))
         }
 
@@ -366,18 +404,22 @@ public actor DiscordRESTProvider: ChatProvider {
                 throw ChatProviderError.invalidRequest("Discord returned an invalid attachment upload URL.")
             }
             let accessed = fileURL.startAccessingSecurityScopedResource()
-            defer { if accessed { fileURL.stopAccessingSecurityScopedResource() } }
+            defer {
+                if accessed {
+                    fileURL.stopAccessingSecurityScopedResource()
+                }
+            }
             var uploadRequest = URLRequest(url: uploadURL)
             uploadRequest.httpMethod = "PUT"
             uploadRequest.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
             let (_, rawResponse) = try await session.upload(for: uploadRequest, fromFile: fileURL)
-            guard let response = rawResponse as? HTTPURLResponse, (200..<300).contains(response.statusCode) else {
+            guard let response = rawResponse as? HTTPURLResponse, (200 ..< 300).contains(response.statusCode) else {
                 throw ChatProviderError.invalidRequest("Discord's attachment storage rejected \(fileURL.lastPathComponent).")
             }
             uploaded.append(.object([
                 "id": .string(String(slot.id)),
                 "filename": .string(fileURL.lastPathComponent),
-                "uploaded_filename": .string(slot.uploadFilename),
+                "uploaded_filename": .string(slot.uploadFilename)
             ]))
         }
         return uploaded
@@ -408,7 +450,9 @@ public actor DiscordRESTProvider: ChatProvider {
         if let index = existing {
             message.reactions[index].didCurrentUserReact.toggle()
             message.reactions[index].count += reacted ? -1 : 1
-            if message.reactions[index].count <= 0 { message.reactions.remove(at: index) }
+            if message.reactions[index].count <= 0 {
+                message.reactions.remove(at: index)
+            }
         } else {
             message.reactions.append(Reaction(emoji: emoji, count: 1, didCurrentUserReact: true))
         }
@@ -490,7 +534,9 @@ public actor DiscordRESTProvider: ChatProvider {
             selfDeaf: selfDeaf,
             selfVideo: selfVideo
         )
-        if channelID == nil { activeVoiceConnection = nil }
+        if channelID == nil {
+            activeVoiceConnection = nil
+        }
     }
 
     private func sendVoiceState(
@@ -529,7 +575,9 @@ public actor DiscordRESTProvider: ChatProvider {
         gatewaySession = nil
         gatewayReady = false
         session.getAllTasks { tasks in
-            for task in tasks { task.cancel() }
+            for task in tasks {
+                task.cancel()
+            }
         }
         continuation?.yield(.connectionChanged(.disconnected))
         continuation?.finish()
@@ -550,10 +598,10 @@ public actor DiscordRESTProvider: ChatProvider {
                     "status": .string(presenceStatus.rawValue),
                     "since": .number(0),
                     "activities": .array([]),
-                    "afk": .bool(false),
+                    "afk": .bool(false)
                 ]),
                 "compress": .bool(false),
-                "client_state": .object(["guild_versions": .object([:])]),
+                "client_state": .object(["guild_versions": .object([:])])
             ])
         ))
         let gateway = GatewaySession(
@@ -585,7 +633,9 @@ public actor DiscordRESTProvider: ChatProvider {
             continuation?.yield(.connectionChanged(connectionState))
             if connectionState == .ready {
                 gatewayLogger.info("Gateway session ready")
-                if let pendingMemberGuildID { await attemptMemberSubscription(guildID: pendingMemberGuildID) }
+                if let pendingMemberGuildID {
+                    await attemptMemberSubscription(guildID: pendingMemberGuildID)
+                }
             }
         case let .dispatch(name, value):
             guard let data = try? JSONEncoder().encode(value),
@@ -619,7 +669,8 @@ public actor DiscordRESTProvider: ChatProvider {
         switch name {
         case "READY", "RESUMED":
             if name == "READY",
-               let ready = try? JSONDecoder().decode(GatewayReadyGuildsDTO.self, from: data) {
+               let ready = try? JSONDecoder().decode(GatewayReadyGuildsDTO.self, from: data)
+            {
                 gatewayGuildIDs = ready.guilds.compactMap { GuildID($0.id) }
                 var voiceStateCount = 0
                 for guild in ready.guilds {
@@ -639,7 +690,9 @@ public actor DiscordRESTProvider: ChatProvider {
                 data: data,
                 gatewayGuildIDs: gatewayGuildIDs
             )
-            for state in states { continuation?.yield(.voiceStateChanged(state)) }
+            for state in states {
+                continuation?.yield(.voiceStateChanged(state))
+            }
             gatewayLogger.info("Supplemental voice-state snapshot received; count=\(states.count)")
         case "GUILD_CREATE":
             guard let snapshot = try? JSONDecoder().decode(GuildVoiceStateSnapshotDTO.self, from: data) else {
@@ -647,7 +700,9 @@ public actor DiscordRESTProvider: ChatProvider {
             }
             let states = snapshot.domainVoiceStates
             gatewayLogger.info("Initial voice-state snapshot received; guild=\(snapshot.id, privacy: .public), count=\(states.count)")
-            for state in states { continuation?.yield(.voiceStateChanged(state)) }
+            for state in states {
+                continuation?.yield(.voiceStateChanged(state))
+            }
         case "MESSAGE_CREATE":
             if let dto = try? JSONDecoder().decode(MessageDTO.self, from: data), let message = try? dto.domain() {
                 cachedMessages[message.id] = message
@@ -663,10 +718,11 @@ public actor DiscordRESTProvider: ChatProvider {
                       currentUser: currentUser,
                       currentStatus: presenceStatus,
                       cachedMembers: cachedMembers,
-                      cachedChannels: cachedChannels.values.flatMap { $0 },
+                      cachedChannels: cachedChannels.values.flatMap(\.self),
                       cachedMessages: Array(cachedMessages.values),
                       cachedGuildRoles: cachedGuildRoles
-                  ) else {
+                  )
+            else {
                 gatewayLogger.debug("Ignored an unresolved or malformed typing event")
                 return
             }
@@ -674,16 +730,24 @@ public actor DiscordRESTProvider: ChatProvider {
         case "MESSAGE_UPDATE":
             if let update = try? JSONDecoder().decode(MessageUpdateDTO.self, from: data),
                let messageID = MessageID(update.id), ChannelID(update.channelID) != nil,
-               var message = cachedMessages[messageID] {
-                if let content = update.content { message.content = content }
-                if let edited = update.editedTimestamp { message.editedTimestamp = DiscordDate.parse(edited) }
-                if let attachments = update.attachments, let values = try? attachments.map({ try $0.domain() }) { message.attachments = values }
+               var message = cachedMessages[messageID]
+            {
+                if let content = update.content {
+                    message.content = content
+                }
+                if let edited = update.editedTimestamp {
+                    message.editedTimestamp = DiscordDate.parse(edited)
+                }
+                if let attachments = update.attachments, let values = try? attachments.map({ try $0.domain() }) {
+                    message.attachments = values
+                }
                 cachedMessages[messageID] = message
                 continuation?.yield(.messageUpdated(message))
             }
         case "MESSAGE_DELETE":
             if let value = try? JSONDecoder().decode(MessageDeleteDTO.self, from: data),
-               let channelID = ChannelID(value.channelID), let messageID = MessageID(value.id) {
+               let channelID = ChannelID(value.channelID), let messageID = MessageID(value.id)
+            {
                 continuation?.yield(.messageDeleted(channelID: channelID, messageID: messageID))
             }
         case "GUILD_MEMBER_LIST_UPDATE":
@@ -742,7 +806,8 @@ public actor DiscordRESTProvider: ChatProvider {
                 }
             }
             if participant.userID == currentUser?.id,
-               participant.channelID == pendingVoiceNegotiation?.channelID {
+               participant.channelID == pendingVoiceNegotiation?.channelID
+            {
                 pendingVoiceNegotiation?.sessionID = participant.sessionID
                 finishVoiceNegotiationIfReady()
             }
@@ -770,7 +835,6 @@ public actor DiscordRESTProvider: ChatProvider {
             break
         }
     }
-
 }
 
 enum DiscordTypingEventResolver {
@@ -791,17 +855,22 @@ enum DiscordTypingEventResolver {
                currentStatus: currentStatus,
                guildRoles: guildID.flatMap { cachedGuildRoles[$0] } ?? [],
                guildID: guildID
-           ).user {
+           ).user
+        {
             return resolved
         }
-        if let user = typing.user, let resolved = try? user.domain() { return resolved }
+        if let user = typing.user, let resolved = try? user.domain() {
+            return resolved
+        }
         if let guildID,
-           let member = cachedMembers[guildID]?.first(where: { $0.id == userID }) {
+           let member = cachedMembers[guildID]?.first(where: { $0.id == userID })
+        {
             return member.user
         }
         if let recipient = cachedChannels.lazy
             .flatMap(\.recipients)
-            .first(where: { $0.id == userID }) {
+            .first(where: { $0.id == userID })
+        {
             return recipient
         }
         if let author = cachedMessages.first(where: { $0.author.id == userID })?.author {
@@ -812,7 +881,6 @@ enum DiscordTypingEventResolver {
 }
 
 extension DiscordRESTProvider {
-
     private func finishVoiceNegotiationIfReady() {
         guard let pending = pendingVoiceNegotiation,
               let sessionID = pending.sessionID,
@@ -848,7 +916,9 @@ extension DiscordRESTProvider {
                 guard let range = operation.range, range.count == 2, let values = operation.items else { continue }
                 let lower = max(0, range[0])
                 let upper = max(lower, range[1])
-                if items.count <= upper { items.append(contentsOf: repeatElement(nil, count: upper + 1 - items.count)) }
+                if items.count <= upper {
+                    items.append(contentsOf: repeatElement(nil, count: upper + 1 - items.count))
+                }
                 for (offset, value) in values.enumerated() where lower + offset <= upper {
                     items[lower + offset] = value
                 }
@@ -857,7 +927,9 @@ extension DiscordRESTProvider {
                 items.insert(item, at: min(max(0, index), items.count))
             case "UPDATE":
                 guard let index = operation.index, index >= 0, let item = operation.item else { continue }
-                if items.count <= index { items.append(contentsOf: repeatElement(nil, count: index + 1 - items.count)) }
+                if items.count <= index {
+                    items.append(contentsOf: repeatElement(nil, count: index + 1 - items.count))
+                }
                 items[index] = item
             case "DELETE":
                 guard let index = operation.index, items.indices.contains(index) else { continue }
@@ -867,7 +939,9 @@ extension DiscordRESTProvider {
                 let lower = max(0, range[0])
                 let upper = min(items.count - 1, range[1])
                 if lower <= upper {
-                    for index in lower...upper { items[index] = nil }
+                    for index in lower ... upper {
+                        items[index] = nil
+                    }
                 }
             default:
                 continue
@@ -884,7 +958,7 @@ extension DiscordRESTProvider {
         headers: [String: String] = [:]
     ) async throws -> Response {
         let (data, response) = try await perform(path, method: method, query: query, body: body, headers: headers)
-        guard (200..<300).contains(response.statusCode) else {
+        guard (200 ..< 300).contains(response.statusCode) else {
             if response.statusCode == 401 {
                 authorizationValue = nil
                 throw ChatProviderError.unauthenticated
@@ -904,7 +978,7 @@ extension DiscordRESTProvider {
 
     private func requestEmpty(_ path: String, method: String) async throws {
         let (_, response) = try await perform(path, method: method, query: [], body: nil, headers: [:])
-        guard (200..<300).contains(response.statusCode) else {
+        guard (200 ..< 300).contains(response.statusCode) else {
             if response.statusCode == 401 {
                 authorizationValue = nil
                 throw ChatProviderError.unauthenticated
@@ -928,11 +1002,13 @@ extension DiscordRESTProvider {
 
         let routeKey = "\(method) \(path)"
         let maximumAttempts = method == "GET" ? 2 : 1
-        for attempt in 0..<maximumAttempts {
+        for attempt in 0 ..< maximumAttempts {
             try await reserveConservativeRequestSlot(routeKey: routeKey)
 
             var components = URLComponents(string: "https://discord.com/api/v\(DiscordProductionBaseline.july2026.apiVersion)\(path)")!
-            if !query.isEmpty { components.queryItems = query }
+            if !query.isEmpty {
+                components.queryItems = query
+            }
             var request = URLRequest(url: components.url!)
             request.httpMethod = method
             request.timeoutInterval = 30
@@ -944,7 +1020,9 @@ extension DiscordRESTProvider {
             }
             request.setValue(token, forHTTPHeaderField: "Authorization")
             try clientMetadata.apply(to: &request)
-            for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
+            for (name, value) in headers {
+                request.setValue(value, forHTTPHeaderField: name)
+            }
             if let body {
                 request.httpBody = try JSONEncoder().encode(JSONValue.object(body))
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -964,7 +1042,9 @@ extension DiscordRESTProvider {
                 // any 429. Mutations never retry automatically; GETs retry once.
                 globalRateLimitDate = max(globalRateLimitDate, retryDate)
                 gatewayLogger.error("Discord returned 429; all REST traffic paused for \(retryAfter, privacy: .public) seconds")
-                if attempt + 1 >= maximumAttempts { return (data, response) }
+                if attempt + 1 >= maximumAttempts {
+                    return (data, response)
+                }
                 continue
             }
 
@@ -981,7 +1061,7 @@ extension DiscordRESTProvider {
                 data: data
             ) {
                 await openSafetyCircuit(status: response.statusCode, discordCode: discordCode, route: route)
-                if response.statusCode == 401 || discordCode == 40_001 {
+                if response.statusCode == 401 || discordCode == 40001 {
                     throw ChatProviderError.unauthenticated
                 }
                 throw ChatProviderError.invalidRequest(Self.safetyStopMessage(
@@ -997,11 +1077,12 @@ extension DiscordRESTProvider {
                         "Discord networking was stopped after this route repeatedly returned an unexpected not-found response."
                     )
                 }
-            } else if (200..<300).contains(response.statusCode) {
+            } else if (200 ..< 300).contains(response.statusCode) {
                 unexpectedNotFoundCounts[route] = nil
             }
             if response.value(forHTTPHeaderField: "X-RateLimit-Remaining") == "0",
-               let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset-After").flatMap(Double.init) {
+               let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset-After").flatMap(Double.init)
+            {
                 routeRateLimitDates[routeKey] = .now.addingTimeInterval(max(0, reset))
             } else {
                 routeRateLimitDates[routeKey] = nil
@@ -1022,7 +1103,9 @@ extension DiscordRESTProvider {
         // into the same instant. Two authenticated REST calls/second is the ceiling.
         nextRequestSlotDate = scheduledDate.addingTimeInterval(0.5)
         let delay = scheduledDate.timeIntervalSince(now)
-        if delay > 0 { try await Task.sleep(for: .seconds(delay)) }
+        if delay > 0 {
+            try await Task.sleep(for: .seconds(delay))
+        }
         guard !requestSafetyCircuitIsOpen else {
             throw ChatProviderError.invalidRequest("Discord networking is stopped for this session.")
         }
@@ -1031,7 +1114,9 @@ extension DiscordRESTProvider {
     private func openSafetyCircuit(status: Int, discordCode: Int?, route: String) async {
         guard !requestSafetyCircuitIsOpen else { return }
         requestSafetyCircuitIsOpen = true
-        if status == 401 || discordCode == 40_001 { authorizationValue = nil }
+        if status == 401 || discordCode == 40001 {
+            authorizationValue = nil
+        }
         gatewayReady = false
         gatewayEventTask?.cancel()
         gatewayEventTask = nil
@@ -1041,7 +1126,9 @@ extension DiscordRESTProvider {
         // outstanding REST/upload/socket task so a request already suspended at
         // the actor boundary cannot continue after a stop signal.
         session.getAllTasks { tasks in
-            for task in tasks { task.cancel() }
+            for task in tasks {
+                task.cancel()
+            }
         }
         continuation?.yield(.connectionChanged(status == 401 ? .authenticationFailed : .disconnected))
         gatewayLogger.fault(
@@ -1055,12 +1142,15 @@ extension DiscordRESTProvider {
     }
 
     private static func isSafetyStop(status: Int, discordCode: Int?, method: String, data: Data) -> Bool {
-        if status == 401 || status == 403 { return true }
-        if let discordCode, [40_001, 40_002, 40_003, 40_004, 40_012, 40_333].contains(discordCode) {
+        if status == 401 || status == 403 {
+            return true
+        }
+        if let discordCode, [40001, 40002, 40003, 40004, 40012, 40333].contains(discordCode) {
             return true
         }
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           object["captcha_key"] != nil || object["captcha_sitekey"] != nil || object["captcha_service"] != nil {
+           object["captcha_key"] != nil || object["captcha_sitekey"] != nil || object["captcha_service"] != nil
+        {
             return true
         }
         // A client-generated mutation reaching HTTP 400 means SwiftChat's
@@ -1070,25 +1160,29 @@ extension DiscordRESTProvider {
 
     private static func safetyStopMessage(status: Int, discordCode: Int?) -> String {
         switch discordCode {
-        case 40_002: "Discord requires account verification. SwiftChat networking has been stopped."
-        case 40_003: "Discord reported that direct messages are being opened too quickly. SwiftChat networking has been stopped."
-        case 40_004: "Discord temporarily disabled message sending. SwiftChat networking has been stopped without retrying."
-        case 40_012: "Discord revoked the connection. SwiftChat networking has been stopped."
-        case 40_333: "Discord rejected the request metadata. SwiftChat networking has been stopped."
+        case 40002: "Discord requires account verification. SwiftChat networking has been stopped."
+        case 40003: "Discord reported that direct messages are being opened too quickly. SwiftChat networking has been stopped."
+        case 40004: "Discord temporarily disabled message sending. SwiftChat networking has been stopped without retrying."
+        case 40012: "Discord revoked the connection. SwiftChat networking has been stopped."
+        case 40333: "Discord rejected the request metadata. SwiftChat networking has been stopped."
         default: "Discord returned a safety-sensitive HTTP \(status) response. SwiftChat networking has been stopped."
         }
     }
 
     private static func routeTemplate(method: String, path: String) -> String {
         let segments = path.split(separator: "/", omittingEmptySubsequences: false).map { segment -> String in
-            if segment.count >= 15, segment.allSatisfy(\.isNumber) { return "{id}" }
+            if segment.count >= 15, segment.allSatisfy(\.isNumber) {
+                return "{id}"
+            }
             return String(segment)
         }
         return "\(method) \(segments.joined(separator: "/"))"
     }
 
     private func authorizationToken() async throws -> String {
-        if let authorizationValue { return authorizationValue }
+        if let authorizationValue {
+            return authorizationValue
+        }
         let credential = try await credentials.credential(for: handle)
         guard let value = String(data: credential, encoding: .utf8) else {
             throw ChatProviderError.unauthenticated
@@ -1099,7 +1193,8 @@ extension DiscordRESTProvider {
 
     static func retryAfter(from data: Data, response: HTTPURLResponse) -> TimeInterval {
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let value = object["retry_after"] as? NSNumber {
+           let value = object["retry_after"] as? NSNumber
+        {
             return max(value.doubleValue, 0.25) + 0.25
         }
         if let value = response.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init) {
@@ -1109,7 +1204,9 @@ extension DiscordRESTProvider {
     }
 
     private static func isGlobalRateLimit(data: Data, response: HTTPURLResponse) -> Bool {
-        if response.value(forHTTPHeaderField: "X-RateLimit-Global")?.lowercased() == "true" { return true }
+        if response.value(forHTTPHeaderField: "X-RateLimit-Global")?.lowercased() == "true" {
+            return true
+        }
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
         return (object["global"] as? Bool) == true
     }
@@ -1142,7 +1239,9 @@ enum DiscordSettingsProto {
         var scores: [String: Int] = [:]
         while let tag = reader.readTag() {
             guard tag.wireType == 2, let payload = reader.readLengthDelimited() else {
-                if !reader.skip(wireType: tag.wireType) { break }
+                if !reader.skip(wireType: tag.wireType) {
+                    break
+                }
                 continue
             }
             if tag.field == 5 {
@@ -1161,7 +1260,8 @@ enum DiscordSettingsProto {
         var values: [String] = []
         while let tag = reader.readTag() {
             if tag.field == field, tag.wireType == 2,
-               let value = reader.readLengthDelimited().flatMap({ String(data: $0, encoding: .utf8) }) {
+               let value = reader.readLengthDelimited().flatMap({ String(data: $0, encoding: .utf8) })
+            {
                 values.append(value)
             } else if !reader.skip(wireType: tag.wireType) {
                 break
@@ -1175,7 +1275,9 @@ enum DiscordSettingsProto {
         var result: [String: Int] = [:]
         while let tag = reader.readTag() {
             guard tag.field == 1, tag.wireType == 2, let entry = reader.readLengthDelimited() else {
-                if !reader.skip(wireType: tag.wireType) { break }
+                if !reader.skip(wireType: tag.wireType) {
+                    break
+                }
                 continue
             }
             var entryReader = ProtoReader(data: entry)
@@ -1190,7 +1292,9 @@ enum DiscordSettingsProto {
                     break
                 }
             }
-            if let key { result[key] = score }
+            if let key {
+                result[key] = score
+            }
         }
         return result
     }
@@ -1201,8 +1305,12 @@ enum DiscordSettingsProto {
         var score = 0
         while let tag = reader.readTag() {
             if tag.wireType == 0, let value = reader.readVarint() {
-                if tag.field == 1 { totalUses = Int(clamping: value) }
-                if tag.field == 4 { score = Int(Int32(bitPattern: UInt32(truncatingIfNeeded: value))) }
+                if tag.field == 1 {
+                    totalUses = Int(clamping: value)
+                }
+                if tag.field == 4 {
+                    score = Int(Int32(bitPattern: UInt32(truncatingIfNeeded: value)))
+                }
             } else if !reader.skip(wireType: tag.wireType) {
                 break
             }
@@ -1248,7 +1356,9 @@ enum DiscordSettingsProto {
         if wireType == 2, let packed = reader.readLengthDelimited() {
             var packedReader = ProtoReader(data: packed)
             var values: [GuildID] = []
-            while let value = packedReader.readFixed64() { values.append(GuildID(rawValue: value)) }
+            while let value = packedReader.readFixed64() {
+                values.append(GuildID(rawValue: value))
+            }
             return values
         }
         _ = reader.skip(wireType: wireType)
@@ -1271,8 +1381,10 @@ private struct ProtoReader {
         while index < data.count, shift < 64 {
             let byte = data[index]
             index += 1
-            value |= UInt64(byte & 0x7f) << shift
-            if byte & 0x80 == 0 { return value }
+            value |= UInt64(byte & 0x7F) << shift
+            if byte & 0x80 == 0 {
+                return value
+            }
             shift += 7
         }
         return nil
@@ -1281,7 +1393,9 @@ private struct ProtoReader {
     mutating func readFixed64() -> UInt64? {
         guard index + 8 <= data.count else { return nil }
         var value: UInt64 = 0
-        for offset in 0..<8 { value |= UInt64(data[index + offset]) << UInt64(offset * 8) }
+        for offset in 0 ..< 8 {
+            value |= UInt64(data[index + offset]) << UInt64(offset * 8)
+        }
         index += 8
         return value
     }
@@ -1291,7 +1405,7 @@ private struct ProtoReader {
         let length = Int(rawLength)
         guard index + length <= data.count else { return nil }
         defer { index += length }
-        return Data(data[index..<(index + length)])
+        return Data(data[index ..< (index + length)])
     }
 
     mutating func skip(wireType: Int) -> Bool {
@@ -1319,7 +1433,7 @@ struct LossyList<Element: Decodable>: Decodable {
         var container = try decoder.unkeyedContainer()
         while !container.isAtEnd {
             do {
-                elements.append(try container.decode(Element.self))
+                try elements.append(container.decode(Element.self))
             } catch {
                 skippedCount += 1
                 _ = try? container.decode(JSONValue.self)
@@ -1342,13 +1456,16 @@ struct UserDTO: Decodable {
                     case videoURL = "video_url"
                 }
             }
+
             var asset: String?
             var label: String?
             var palette: String?
             var assets: AssetsDTO?
         }
+
         var nameplate: NameplateDTO?
     }
+
     struct PrimaryGuildDTO: Decodable {
         var identityGuildID: String?
         var identityEnabled: Bool?
@@ -1358,6 +1475,7 @@ struct UserDTO: Decodable {
             case identityGuildID = "identity_guild_id", identityEnabled = "identity_enabled", tag, badge
         }
     }
+
     struct DisplayNameStyleDTO: Decodable {
         var fontID: Int?
         var effectID: Int?
@@ -1437,9 +1555,13 @@ private struct ProfileMetadataDTO: Decodable {
     struct EffectDTO: Decodable {
         var id: String?
         var skuID: String?
-        var resolvedID: String? { id ?? skuID }
+        var resolvedID: String? {
+            id ?? skuID
+        }
+
         enum CodingKeys: String, CodingKey { case id, skuID = "sku_id" }
     }
+
     var bio: String?
     var pronouns: String?
     var banner: String?
@@ -1547,6 +1669,7 @@ private struct ProfileEffectConfigDTO: Decodable {
             var x: Int?
             var y: Int?
         }
+
         struct SourceDTO: Decodable { var src: String? }
 
         var src: String?
@@ -1770,6 +1893,7 @@ struct GuildMemberDTO: Decodable {
                 var id: String?
                 var animated: Bool?
             }
+
             var name: String?
             var type: Int?
             var state: String?
@@ -1783,13 +1907,17 @@ struct GuildMemberDTO: Decodable {
                     }
                     return "\(name) "
                 } ?? ""
-                if type == 4, let state, !state.isEmpty { return emojiPrefix + state }
+                if type == 4, let state, !state.isEmpty {
+                    return emojiPrefix + state
+                }
                 return state.flatMap { $0.isEmpty ? nil : $0 } ?? name
             }
         }
+
         var status: String?
         var activities: [ActivityDTO]?
     }
+
     var user: UserDTO
     var nick: String?
     var roles: [String]?
@@ -1806,12 +1934,16 @@ struct GuildMemberDTO: Decodable {
         guildID: GuildID? = nil
     ) throws -> Member {
         var domainUser = try user.domain()
-        if let nick, !nick.isEmpty { domainUser.displayName = nick }
+        if let nick, !nick.isEmpty {
+            domainUser.displayName = nick
+        }
         let guildAvatarURL: URL? = avatar.flatMap { avatarHash in
             guard let guildID else { return nil }
             return URL(string: "https://cdn.discordapp.com/guilds/\(guildID)/users/\(domainUser.id)/avatars/\(avatarHash).webp?size=128&animated=\(avatarHash.hasPrefix("a_") ? "true" : "false")")
         }
-        if let guildAvatarURL { domainUser.avatarURL = guildAvatarURL }
+        if let guildAvatarURL {
+            domainUser.avatarURL = guildAvatarURL
+        }
         let status = domainUser.id == currentUserID
             ? currentStatus
             : (overridePresence ?? presence)?.status.flatMap(PresenceStatus.init(rawValue:)) ?? .offline
@@ -1819,7 +1951,9 @@ struct GuildMemberDTO: Decodable {
         let categoryRole = guildRoles
             .filter { $0.hoist && memberRoleIDs.contains($0.id) }
             .max { lhs, rhs in
-                if lhs.position != rhs.position { return lhs.position < rhs.position }
+                if lhs.position != rhs.position {
+                    return lhs.position < rhs.position
+                }
                 return lhs.id < rhs.id
             }
         let domainRoles = guildRoles
@@ -1908,10 +2042,12 @@ private struct GuildMemberListUpdateDTO: Decodable {
         var items: [Item]?
         var item: Item?
     }
+
     struct Item: Decodable {
         var member: GuildMemberDTO?
         var presence: GuildMemberDTO.PresenceDTO?
     }
+
     var guildID: String
     var ops: [Operation]
     enum CodingKeys: String, CodingKey { case guildID = "guild_id", ops }
@@ -1928,10 +2064,10 @@ enum DiscordGatewayPayloadFactory {
                         "typing": true,
                         "activities": true,
                         "threads": true,
-                        "channels": channels,
-                    ] as [String: Any],
-                ],
-            ] as [String: Any],
+                        "channels": channels
+                    ] as [String: Any]
+                ]
+            ] as [String: Any]
         ]
     }
 
@@ -1950,8 +2086,8 @@ enum DiscordGatewayPayloadFactory {
                 "self_mute": selfMute,
                 "self_deaf": selfDeaf,
                 "self_video": selfVideo,
-                "self_stream": false,
-            ] as [String: Any],
+                "self_stream": false
+            ] as [String: Any]
         ]
     }
 }
@@ -2046,6 +2182,7 @@ struct GatewayReadyGuildsDTO: Decodable {
             )?.elements ?? []
         }
     }
+
     var guilds: [GuildReference]
 }
 
@@ -2074,9 +2211,13 @@ enum ReadySupplementalVoiceStateResolver {
                     )
                 }
             } else if let keyed = object["guilds"] as? [String: Any] {
-                for (guildID, batch) in keyed { append(rawStates: batch, fallbackGuildID: GuildID(guildID)) }
+                for (guildID, batch) in keyed {
+                    append(rawStates: batch, fallbackGuildID: GuildID(guildID))
+                }
             } else {
-                for (guildID, batch) in object { append(rawStates: batch, fallbackGuildID: GuildID(guildID)) }
+                for (guildID, batch) in object {
+                    append(rawStates: batch, fallbackGuildID: GuildID(guildID))
+                }
             }
         } else if let batches = merged as? [Any] {
             for (index, batch) in batches.enumerated() {
@@ -2094,7 +2235,9 @@ enum ReadySupplementalVoiceStateResolver {
         }
 
         var byUserID: [UserID: VoiceParticipantState] = [:]
-        for state in resolved { byUserID[state.userID] = state }
+        for state in resolved {
+            byUserID[state.userID] = state
+        }
         return Array(byUserID.values)
     }
 }
@@ -2205,8 +2348,8 @@ private struct MessageDTO: Decodable {
         guard let author else {
             throw ChatProviderError.invalidRequest("Discord returned a message without an author.")
         }
-        return Message(
-            id: id, channelID: channelID, author: try author.domain(), content: content ?? "",
+        return try Message(
+            id: id, channelID: channelID, author: author.domain(), content: content ?? "",
             timestamp: timestamp.flatMap(DiscordDate.parse) ?? .now,
             editedTimestamp: editedTimestamp.flatMap(DiscordDate.parse),
             replyTo: messageReference?.messageID.flatMap(MessageID.init) ?? referencedMessage.flatMap { MessageID($0.id) },
@@ -2223,8 +2366,11 @@ private struct StringOrIntegerDTO: Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if let string = try? container.decode(String.self) { value = string }
-        else { value = String(try container.decode(UInt64.self)) }
+        if let string = try? container.decode(String.self) {
+            value = string
+        } else {
+            value = try String(container.decode(UInt64.self))
+        }
     }
 }
 
@@ -2280,7 +2426,9 @@ private struct EmojiCacheEntry: Codable {
     var fetchedAt: Date
     var emojis: [DiscordEmoji]
 
-    var isFresh: Bool { Date.now.timeIntervalSince(fetchedAt) < 7 * 24 * 60 * 60 }
+    var isFresh: Bool {
+        Date.now.timeIntervalSince(fetchedAt) < 7 * 24 * 60 * 60
+    }
 }
 
 private enum DiscordDate {

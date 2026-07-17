@@ -1,6 +1,6 @@
+@testable import DaveKit
 import Foundation
 import Testing
-@testable import DaveKit
 
 private actor TestDelegate: DaveSessionDelegate {
     private(set) var keyPackageCount = 0
@@ -11,12 +11,16 @@ private actor TestDelegate: DaveSessionDelegate {
         keyPackageCount += 1
         lastKeyPackage = keyPackage
     }
-    func readyForTransition(transitionId: UInt16) async { readyTransitionIDs.append(transitionId) }
+
+    func readyForTransition(transitionId: UInt16) async {
+        readyTransitionIDs.append(transitionId)
+    }
+
     func mlsCommitWelcome(welcome: Data) async {}
     func mlsInvalidCommitWelcome(transitionId: UInt16) async {}
 }
 
-@Test func prepareEpochDistinguishesNewGroupFromProtocolVersionRotation() async {
+@Test func `prepare epoch distinguishes new group from protocol version rotation`() async {
     let delegate = TestDelegate()
     let manager = DaveSessionManager(selfUserId: "1", groupId: 10, delegate: delegate)
 
@@ -30,7 +34,7 @@ private actor TestDelegate: DaveSessionDelegate {
     #expect(await delegate.readyTransitionIDs == [44])
 }
 
-@Test func passthroughEncryptionRoundTripsH264Frames() async throws {
+@Test func `passthrough encryption round trips H 264 frames`() async throws {
     let delegate = TestDelegate()
     let manager = DaveSessionManager(selfUserId: "1", groupId: 10, delegate: delegate)
     await manager.addUser(userId: "2")
@@ -44,7 +48,7 @@ private actor TestDelegate: DaveSessionDelegate {
     #expect(decrypted == frame)
 }
 
-@Test func passthroughEncryptionRoundTripsAudioFrames() async throws {
+@Test func `passthrough encryption round trips audio frames`() async throws {
     let delegate = TestDelegate()
     let manager = DaveSessionManager(selfUserId: "1", groupId: 10, delegate: delegate)
     await manager.addUser(userId: "2")

@@ -8,7 +8,7 @@ let package = Package(
     dependencies: [
         .package(path: "../SwiftchatModels"),
         .package(path: "../DaveKit"),
-        .package(url: "https://github.com/jedisct1/swift-sodium.git", from: "0.9.1"),
+        .package(url: "https://github.com/jedisct1/swift-sodium.git", from: "0.9.1")
     ],
     targets: [
         .target(
@@ -17,7 +17,7 @@ let package = Package(
                 "SwiftchatModels",
                 "DaveKit",
                 .product(name: "Sodium", package: "swift-sodium"),
-                .product(name: "Clibsodium", package: "swift-sodium"),
+                .product(name: "Clibsodium", package: "swift-sodium")
             ],
             swiftSettings: [.interoperabilityMode(.Cxx)]
         ),
@@ -25,6 +25,6 @@ let package = Package(
             name: "MediaPipelineTests",
             dependencies: ["MediaPipeline"],
             swiftSettings: [.interoperabilityMode(.Cxx)]
-        ),
+        )
     ]
 )

@@ -1,9 +1,9 @@
+@testable import DiscordProtocol
 import Foundation
 import SwiftchatModels
 import Testing
-@testable import DiscordProtocol
 
-@Test func guildTypingPayloadUsesMemberAndNickname() throws {
+@Test func `guild typing payload uses member and nickname`() throws {
     let payload = try JSONDecoder().decode(TypingStartDTO.self, from: Data(#"""
     {
       "channel_id":"200",
@@ -30,7 +30,7 @@ import Testing
     #expect(user?.displayName == "Guild Alex")
 }
 
-@Test func DMTypingPayloadUsesPartialUserOrRecipientCache() throws {
+@Test func `DM typing payload uses partial user or recipient cache`() throws {
     let partial = try JSONDecoder().decode(TypingStartDTO.self, from: Data(#"""
     {"channel_id":"400","user_id":"3","timestamp":1784100000,
      "user":{"id":"3","username":"sam","global_name":"Sam"}}
@@ -72,7 +72,7 @@ import Testing
     #expect(cached == recipient)
 }
 
-@Test func IDOnlyTypingUsesGuildAndMessageCachesWithoutFabricatingUnknownUsers() throws {
+@Test func `ID only typing uses guild and message caches without fabricating unknown users`() throws {
     let payload = try JSONDecoder().decode(
         TypingStartDTO.self,
         from: Data(#"{"channel_id":"200","guild_id":"100","user_id":"5","timestamp":1784100000}"#.utf8)

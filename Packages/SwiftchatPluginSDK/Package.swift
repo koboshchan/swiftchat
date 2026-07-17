@@ -7,6 +7,6 @@ let package = Package(
     products: [.library(name: "SwiftchatPluginSDK", targets: ["SwiftchatPluginSDK"])],
     targets: [
         .target(name: "SwiftchatPluginSDK"),
-        .testTarget(name: "SwiftchatPluginSDKTests", dependencies: ["SwiftchatPluginSDK"]),
+        .testTarget(name: "SwiftchatPluginSDKTests", dependencies: ["SwiftchatPluginSDK"])
     ]
 )

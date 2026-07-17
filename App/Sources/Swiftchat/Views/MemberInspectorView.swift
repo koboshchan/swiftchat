@@ -62,7 +62,9 @@ struct MemberSection: Identifiable, Equatable {
         .sorted { lhs, rhs in
             let lhsPosition = lhs.members.first?.rolePosition ?? 0
             let rhsPosition = rhs.members.first?.rolePosition ?? 0
-            if lhsPosition != rhsPosition { return lhsPosition > rhsPosition }
+            if lhsPosition != rhsPosition {
+                return lhsPosition > rhsPosition
+            }
             return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
         }
 
@@ -185,7 +187,11 @@ private struct MemberRow: View {
         .popover(
             isPresented: Binding(
                 get: { isSelected && isProfilePresented },
-                set: { if !$0 { dismissProfile() } }
+                set: {
+                    if !$0 {
+                        dismissProfile()
+                    }
+                }
             ),
             attachmentAnchor: .rect(.bounds),
             arrowEdge: .trailing
@@ -239,8 +245,8 @@ struct DecoratedAvatarView: View {
             AvatarView(name: name, url: avatarURL, size: size)
             if let decorationURL {
                 AnimatedRemoteImage(url: decorationURL)
-                .frame(width: size * 1.22, height: size * 1.22)
-                .allowsHitTesting(false)
+                    .frame(width: size * 1.22, height: size * 1.22)
+                    .allowsHitTesting(false)
             }
         }
         .frame(width: size * 1.12, height: size * 1.12)
@@ -309,7 +315,7 @@ private struct NameplateBackground: View {
                         .init(color: .clear, location: 0.42),
                         .init(color: .black.opacity(0.18), location: 0.52),
                         .init(color: .black.opacity(0.72), location: 0.66),
-                        .init(color: .black, location: 0.76),
+                        .init(color: .black, location: 0.76)
                     ],
                     startPoint: .leading,
                     endPoint: .trailing

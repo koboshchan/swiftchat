@@ -1,12 +1,12 @@
 import Foundation
-import Testing
 @testable import MediaPipeline
+import Testing
 
-@Test func genericNACKCompactsAndExpandsWraparoundSequences() throws {
+@Test func `generic NACK compacts and expands wraparound sequences`() throws {
     let nack = RTCPGenericNACK(
         senderSSRC: 10,
         mediaSSRC: 20,
-        lostSequences: [65_535, 0, 1, 22]
+        lostSequences: [65535, 0, 1, 22]
     )
     let header = try #require(RTCPHeader.parse(from: nack.header))
 
@@ -16,14 +16,14 @@ import Testing
     #expect(nack.payload == Data([
         0, 0, 0, 20,
         0xFF, 0xFF, 0, 3,
-        0, 22, 0, 0,
+        0, 22, 0, 0
     ]))
     #expect(RTCPGenericNACK.parse(header: header, payload: nack.payload) == nack)
 }
 
-@Test func retransmissionCacheEvictsOldestPackets() {
+@Test func `retransmission cache evicts oldest packets`() {
     var cache = RTPRetransmissionCache(capacity: 2)
-    for sequence in 1...3 {
+    for sequence in 1 ... 3 {
         cache.insert(RTPRetransmissionPacket(
             sequence: UInt16(sequence),
             timestamp: UInt32(sequence * 90),
@@ -37,7 +37,7 @@ import Testing
     #expect(cache.packet(sequence: 3)?.marker == true)
 }
 
-@Test func pictureLossIndicationUsesRFC4585PayloadSpecificFeedbackLayout() throws {
+@Test func `picture loss indication uses RFC 4585 payload specific feedback layout`() throws {
     let pli = RTCPPictureLossIndication(senderSSRC: 10, mediaSSRC: 20)
     let header = try #require(RTCPHeader.parse(from: pli.header))
 

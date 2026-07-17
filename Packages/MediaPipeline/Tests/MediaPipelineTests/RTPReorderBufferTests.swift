@@ -1,8 +1,8 @@
 import Foundation
-import Testing
 @testable import MediaPipeline
+import Testing
 
-@Test func rtpReorderBufferRestoresSequenceAndHandlesWraparound() {
+@Test func `rtp reorder buffer restores sequence and handles wraparound`() {
     var buffer = RTPReorderBuffer(maximumHold: 3)
     func packet(_ sequence: UInt16) -> RTPBufferedPacket {
         RTPBufferedPacket(
@@ -10,13 +10,13 @@ import Testing
             payload: Data([UInt8(truncatingIfNeeded: sequence)])
         )
     }
-    #expect(buffer.insert(packet(65_534)).map(\.header.sequence) == [65_534])
+    #expect(buffer.insert(packet(65534)).map(\.header.sequence) == [65534])
     #expect(buffer.insert(packet(0)).isEmpty)
-    #expect(buffer.insert(packet(65_535)).map(\.header.sequence) == [65_535, 0])
+    #expect(buffer.insert(packet(65535)).map(\.header.sequence) == [65535, 0])
     #expect(buffer.insert(packet(0)).isEmpty)
 }
 
-@Test func rtpReorderBufferSkipsAConfirmedGap() {
+@Test func `rtp reorder buffer skips A confirmed gap`() {
     var buffer = RTPReorderBuffer(maximumHold: 3)
     func packet(_ sequence: UInt16) -> RTPBufferedPacket {
         RTPBufferedPacket(
@@ -36,7 +36,7 @@ import Testing
     #expect(!didSkipAgain)
 }
 
-@Test func rtpReorderBufferClearsPendingNACKWhenRetransmissionArrives() {
+@Test func `rtp reorder buffer clears pending NACK when retransmission arrives`() {
     var buffer = RTPReorderBuffer(maximumHold: 4)
     func packet(_ sequence: UInt16) -> RTPBufferedPacket {
         RTPBufferedPacket(
@@ -45,7 +45,7 @@ import Testing
         )
     }
 
-    #expect(buffer.insert(packet(65_535)).map(\.header.sequence) == [65_535])
+    #expect(buffer.insert(packet(65535)).map(\.header.sequence) == [65535])
     #expect(buffer.insert(packet(1)).isEmpty)
     #expect(buffer.takeNewMissingSequences() == [0])
     #expect(buffer.insert(packet(0)).map(\.header.sequence) == [0, 1])

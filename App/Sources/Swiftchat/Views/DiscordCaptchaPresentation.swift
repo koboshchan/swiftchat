@@ -25,7 +25,7 @@ struct DiscordCaptchaView: NSViewControllerRepresentable {
             host.leadingAnchor.constraint(equalTo: controller.view.leadingAnchor),
             host.trailingAnchor.constraint(equalTo: controller.view.trailingAnchor),
             host.topAnchor.constraint(equalTo: controller.view.topAnchor),
-            host.bottomAnchor.constraint(equalTo: controller.view.bottomAnchor),
+            host.bottomAnchor.constraint(equalTo: controller.view.bottomAnchor)
         ])
         context.coordinator.start(on: host)
         return controller
@@ -77,7 +77,7 @@ struct DiscordCaptchaView: NSViewControllerRepresentable {
                 guard let self else { return }
                 let token = try? result.dematerialize()
                 Task { @MainActor in self.onToken(token) }
-                self.hcaptcha?.reset()
+                hcaptcha?.reset()
             }
         }
 
