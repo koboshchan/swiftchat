@@ -1,6 +1,9 @@
 {
   "fill" : {
-    "automatic-gradient" : "display-p3:0.92549,0.75294,0.90196,1.00000",
+    "linear-gradient" : [
+      "srgb:0.94005,0.70574,0.87651,1.00000",
+      "srgb:0.95885,0.71251,0.92992,1.00000"
+    ],
     "orientation" : {
       "start" : {
         "x" : 0.5,
@@ -16,20 +19,23 @@
     {
       "layers" : [
         {
+          "fill" : {
+            "solid" : "display-p3:0.36492,0.07410,0.24188,0.80000"
+          },
           "image-name" : "sakura-layer-05-deep-details.svg",
           "name" : "sakura-layer-05-deep-details",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.44,
             "translation-in-points" : [
-              0,
-              0
+              -144.85085227272748,
+              -160.45809659090912
             ]
           }
         }
       ],
       "name" : "Top Layer",
       "position" : {
-        "scale" : 0.38,
+        "scale" : 0.44,
         "translation-in-points" : [
           316.515625,
           -182.75
@@ -47,24 +53,30 @@
     {
       "layers" : [
         {
+          "fill" : {
+            "solid" : "display-p3:0.93366,0.61110,0.70836,0.70000"
+          },
           "image-name" : "sakura-layer-02-petal-fill.svg",
           "name" : "sakura-layer-02-petal-fill",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.48,
             "translation-in-points" : [
-              0,
-              0
+              -144.85085227272748,
+              -160.45809659090912
             ]
           }
         },
         {
+          "fill" : {
+            "solid" : "display-p3:0.95692,0.77365,0.82293,0.70000"
+          },
           "image-name" : "sakura-layer-01-base 2.svg",
           "name" : "sakura-layer-01-base 2",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.48,
             "translation-in-points" : [
-              0,
-              0
+              -144.85085227272748,
+              -160.45809659090912
             ]
           }
         }
@@ -72,7 +84,7 @@
       "lighting" : "individual",
       "name" : "Middle Layer",
       "position" : {
-        "scale" : 0.38,
+        "scale" : 0.44,
         "translation-in-points" : [
           316.515625,
           -182.75
@@ -90,24 +102,31 @@
     {
       "layers" : [
         {
+          "fill" : {
+            "solid" : "srgb:0.81936,0.63083,0.69438,0.84484"
+          },
+          "hidden" : false,
           "image-name" : "sakura-layer-04-mid-shadows.svg",
           "name" : "sakura-layer-04-mid-shadows",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.48,
             "translation-in-points" : [
-              0,
-              0
+              -144.85085227272748,
+              -160.45809659090912
             ]
           }
         },
         {
+          "fill" : {
+            "solid" : "srgb:0.99311,0.76825,0.83393,0.53272"
+          },
           "image-name" : "sakura-layer-03-light-details.svg",
           "name" : "sakura-layer-03-light-details",
           "position" : {
-            "scale" : 0.38,
+            "scale" : 0.48,
             "translation-in-points" : [
-              0,
-              0
+              -144.85085227272748,
+              -160.45809659090912
             ]
           }
         }
@@ -115,7 +134,7 @@
       "lighting" : "combined",
       "name" : "Bottom Layer",
       "position" : {
-        "scale" : 0.38,
+        "scale" : 0.44,
         "translation-in-points" : [
           316.515625,
           -182.75
@@ -133,7 +152,7 @@
     {
       "layers" : [
         {
-          "blend-mode" : "normal",
+          "blend-mode" : "multiply",
           "fill-specializations" : [
             {
               "value" : "system-light"
@@ -141,24 +160,16 @@
             {
               "appearance" : "dark",
               "value" : {
-                "automatic-gradient" : "display-p3:0.92549,0.75294,0.90196,1.00000",
-                "orientation" : {
-                  "start" : {
-                    "x" : 0.5,
-                    "y" : 1
-                  },
-                  "stop" : {
-                    "x" : 0.5,
-                    "y" : 0
-                  }
-                }
+                "solid" : "srgb:1.00000,0.79348,0.94276,0.91616"
               }
             }
           ],
+          "glass" : true,
+          "hidden" : false,
           "image-name" : "discord-rounded-icon-composer.svg",
           "name" : "Discord Icon",
           "position" : {
-            "scale" : 0.84,
+            "scale" : 0.713,
             "translation-in-points" : [
               0,
               10.634256810580496

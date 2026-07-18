@@ -16,13 +16,16 @@
     {
       "layers" : [
         {
+          "fill" : {
+            "solid" : "display-p3:0.36492,0.07410,0.24188,0.80000"
+          },
           "image-name" : "sakura-layer-05-deep-details.svg",
           "name" : "sakura-layer-05-deep-details",
           "position" : {
             "scale" : 0.56,
             "translation-in-points" : [
-              0,
-              0
+              -10.923955922446908,
+              9.976400000000012
             ]
           }
         }
@@ -41,6 +44,9 @@
     {
       "layers" : [
         {
+          "fill" : {
+            "solid" : "display-p3:0.93366,0.61110,0.70836,0.70000"
+          },
           "image-name" : "sakura-layer-02-petal-fill.svg",
           "name" : "sakura-layer-02-petal-fill",
           "position" : {
@@ -52,6 +58,9 @@
           }
         },
         {
+          "fill" : {
+            "solid" : "display-p3:0.95692,0.77365,0.82293,0.70000"
+          },
           "image-name" : "sakura-layer-01-base 2.svg",
           "name" : "sakura-layer-01-base 2",
           "position" : {
@@ -76,6 +85,10 @@
     {
       "layers" : [
         {
+          "fill" : {
+            "solid" : "srgb:0.81936,0.63083,0.69438,0.84484"
+          },
+          "hidden" : false,
           "image-name" : "sakura-layer-04-mid-shadows.svg",
           "name" : "sakura-layer-04-mid-shadows",
           "position" : {
@@ -87,6 +100,9 @@
           }
         },
         {
+          "fill" : {
+            "solid" : "srgb:0.99311,0.76825,0.83393,0.53272"
+          },
           "image-name" : "sakura-layer-03-light-details.svg",
           "name" : "sakura-layer-03-light-details",
           "position" : {
